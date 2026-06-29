@@ -8,7 +8,7 @@ import os
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 CSS REDUZIDO: Apenas para a Barra Lateral Escura e Bordas Finas
+# 🌟 CSS ATUALIZADO: Com as cores do botão de abrir/fechar a barra lateral
 st.markdown("""
 <style>
 /* 1. Fundo Principal */
@@ -42,6 +42,19 @@ div.stButton > button[kind="secondary"]:hover {
     border-color: #318655 !important;
     color: #318655 !important;
     background-color: #ffffff !important;
+}
+
+/* 5. Ícone para abrir o menu lateral (quando oculto) - Verde Destaque */
+[data-testid="collapsedControl"] svg {
+    color: #318655 !important;
+    fill: #318655 !important;
+}
+
+/* 6. Ícone para fechar o menu lateral (quando aberto) - Branco */
+[data-testid="stSidebarCollapseButton"] svg, 
+[data-testid="stSidebar"] button[kind="header"] svg {
+    color: #ffffff !important;
+    fill: #ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)
