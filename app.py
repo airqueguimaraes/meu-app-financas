@@ -14,7 +14,6 @@ try:
     CLIENT_EMAIL = st.secrets["connections"]["gsheets"]["client_email"]
     PRIVATE_KEY_ID = st.secrets["connections"]["gsheets"]["private_key_id"]
     CLIENT_ID = st.secrets["connections"]["gsheets"]["client_id"]
-    PRIVATE_KEY = st.secrets["connections"]["gsheets"]["private_key"]  # ← movida para Secrets
 except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
@@ -24,7 +23,7 @@ creds_dict = {
     "type": "service_account",
     "project_id": PROJECT_ID,
     "private_key_id": PRIVATE_KEY_ID,
-    "private_key": PRIVATE_KEY,  # ← lida do Secrets, não mais hardcoded
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDwCfI60IKUxHI\njh8rHp+MOYkU/gCL8UB/HJIQbn1FJoTYKG1dwrYws3LvjEjQeS98uU3ZViZ0CEhE\n7VMRfseBtkYcGRcO/3tcswR+7avAkruHvihLseA/BOEM8IeVe5YeafqbqQkWzmNp\nyuPKpIApKfZ3y6XZXu7VK53bXpujHxTkSqyrK7WCbzPuGqQ9ycmJqBLze0s+stfr\n2vcRWBKWM7w/NhcV4QxxPrOg9sGPSUibdc0YhCfwkQyOtUVjBn1f4EVdz7b4+4Be\nTwOj5BBGVYchVEx7Pa5MOVljzt5It/KU2ovvz3dC4zPvg8nWYAdxaJiTPbbl1aL7\nieUGh7krAgMBAAECggEACYYt6V6uReZTdS3vt59eepTKEKq9yBFNkWGzJvgultC6\n90bFm3bqemV2GtBOh/t9eKoOGZxRc/p7LwSvsqg3zh3aPL++bs0LaYU5m3C2Qeu3\nEscJGuBlXWuVWkB8YvoyYaRyZw8gZsBVTJkXNY2EwXv4hqJH8tLloprkAVURvtah\nyUU7nYVtLbd9LyJK0EmWJTW3AOhL59yx2RY90lPG25FVkQH/fMe5uRWiTjHTL++4\nb5xKqKJ6u6rP3sI/wB4YtrJff0+4weSzZr2tJjmT0HVZ5/Ms/Kkoq8ALTVBJqo6w\nRBWCZQBIuASGU64nz5Nj8wxs2m3/EKq8NNpyynbZ4QKBgQDya4pQLepgdbtCEahe\nHJn2620u39jwMYyn0uGwtkfq3HmTyW++EeFSepy/Rts/eDp9U7GQ5+8XB7S6qPeH\nWvM3OLnNHXLsoJo5zwkWiyAYBvlNrsNBkuQ45H3mgh5dJ1Yl5owaVorHQAaHhqaF\nUia5rUDPngU6KGFtykzEQZ/2YwKBgQDOt1hLkau7qxO7YNm852dKjW9hN39JUpLc\n1V38SbNODAes2SX0D/9rHNiYyb7o34kCrT214UbrfD7kh/WiAne5Kdihwco9PHwK\nSMAgs2NpSPROpSp4ltKHDF1gyfVPSUgYkV5a6uPHspW6XNYi7PqPPjYHq+7hXQWP\nMoY3HzoomQKBgQC8y8QMbbX7KbWM3vOhV+UQyIlf2DW72tsQWMwsM8oOv2ZwEpFU\nFdjFw3gP/78Az0G+GVBQ6lDqPrYiKTWd1NdWSndpp2W5o9p46yTIydFU5RmDxneK\nujvDky/6NZwwMFKHceXrHTs3skVjhxpo+nHuaV/wUcEAajJ2rvbaYcGSwQKBgQCC\n5VBQ0dY4CNV+0o4t8y3R5IuBuN2t9U6v7aAM8DJNGosFpZ9F05d+IQ76eM2dsmaU\nvlSURildVhiRJ5Kf2wYqxte5XfgNHK7C6FxYmJ87fQnOfwHMyFxZTbgXYOsoIJQ5\nklt4IMLJokjzcHPcO8lRSSh3ZSTnqbqqeWjJoMl4CQKBgQCcbO7Yy9C7kzB7IzFb\nfp5AVpggR2g/IfYt40OXONapYjEWXqqpIMg97/61SriySoBRDsZB5TdtQ8kr87Kr\noshKbctusiiYkx6CRJ4DMtRuOatPr5tALU+sleYkstGoS+4jkH9CmGspB9ckPKEx\ns8kwm6PMzQBUipYtDcKU3y7crA==\n-----END PRIVATE KEY-----\n",
     "client_email": CLIENT_EMAIL,
     "client_id": CLIENT_ID,
     "token_uri": "https://oauth2.googleapis.com/token"
@@ -51,25 +50,13 @@ if "edit_values" not in st.session_state:
 if "form_clear_trigger" not in st.session_state:
     st.session_state.form_clear_trigger = False
 
-# Conversor robusto para leitura de saldos e tabelas
+# Conversor limpo para floats numéricos vindos do Sheets
 def clean_float(val):
-    if val is None or val == "":
+    if val == "" or pd.isna(val):
         return 0.0
-    try:
-        if pd.isna(val):
-            return 0.0
-    except (TypeError, ValueError):
-        pass
-    # Números já convertidos pelo gspread (int ou float) — retorna direto
     if isinstance(val, (int, float)):
         return float(val)
-    val_str = str(val).strip()
-    # Formato BR com vírgula decimal (ex: "45,50" ou "1.234,56"):
-    # remove o ponto de milhar e converte a vírgula em ponto
-    if "," in val_str:
-        val_str = val_str.replace(".", "").replace(",", ".")
-    # Formato com ponto decimal retornado pela API (ex: "45.5"):
-    # NÃO remover o ponto — é o separador decimal aqui
+    val_str = str(val).strip().replace(".", "").replace(",", ".")
     try:
         return float(val_str)
     except ValueError:
@@ -79,7 +66,8 @@ def clean_float(val):
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        data = worksheet.get_all_records()
+        # CORREÇÃO 1 DO CLAUDE: Retorna valores brutos direto da API sem passar pelo locale regional
+        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         if not data:
             return []
         
@@ -111,12 +99,6 @@ def format_br_date(dt):
     dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
-
-# Transforma float em fórmula locale-safe para gravação no Google Sheets.
-# Em fórmulas, o ponto é SEMPRE o separador decimal — independente do locale da planilha.
-# Ex: num_formula(45.5) → "=45.50" → Sheets avalia como 45,50 no locale BR ✓
-def num_formula(value: float) -> str:
-    return f"={value:.2f}"
 
 # --- PROCESSAMENTO DOS SALDOS ---
 st.sidebar.title("Calendário")
@@ -286,7 +268,7 @@ if submit_btn:
     try:
         clean_amount_str = tx_amount_str.strip().replace(" ", "")
         if "," in clean_amount_str and "." in clean_amount_str:
-            clean_amount_str = clean_amount_str.replace(".", "")  # remove separador de milhar
+            clean_amount_str = clean_amount_str.replace(".", "")
         clean_amount_str = clean_amount_str.replace(",", ".")
         processed_amount = float(clean_amount_str)
     except ValueError:
@@ -294,16 +276,16 @@ if submit_btn:
         st.stop()
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
-
-    # Usa fórmula (ex: "=45.50") em vez de string com vírgula.
-    # Em fórmulas do Sheets, o ponto é SEMPRE decimal — sem ambiguidade de locale.
+    
+    # CORREÇÃO 2 DO CLAUDE: Envia float Python puro arredondado para duas casas decimais
+    # Chega na API do Google Sheets como um 'JSON Number' puro, ignorando qualquer conflito cultural de locale
     updated_row = [
         tx_type,
         tx_desc,
-        num_formula(processed_amount),    # "=45.50" → avaliado como 45,50 no Sheets ✓
+        round(processed_amount, 2),       
         tx_method,
-        installments,
-        num_formula(processed_inst_val),  # "=22.75" se parcelado ✓
+        int(installments),                
+        round(processed_inst_val, 2),     
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
