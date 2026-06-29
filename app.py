@@ -271,14 +271,18 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # CORREÇÃO DEFINITIVA: Passamos os valores matemáticos puros para o gspread salvar sem aspas textuais
+    # CORREÇÃO DEFINITIVA DO BUG DE VALOR: Forçamos o envio como string contendo exatamente duas casas decimais fixas ("75,50")
+    # Usando o modo USER_ENTERED, o Google Sheets interpretará as duas casas após a vírgula de forma idêntica à digitação humana
+    sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
+    sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
+    
     updated_row = [
         tx_type,
         tx_desc,
-        processed_amount, 
+        sheet_amount, 
         tx_method,
         installments,
-        processed_inst_val, 
+        sheet_inst_val, 
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
@@ -288,16 +292,15 @@ if submit_btn:
     
     try:
         if st.session_state.editing_index is not None:
-            # RAW desativa as aspas inteligentes de strings e preserva os decimais floats puros
             worksheet.update(
                 range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                 values=[updated_row],
-                value_input_option="RAW"
+                value_input_option="USER_ENTERED"
             )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row, value_input_option="RAW")
+            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
             
         st.cache_data.clear()
         st.rerun()
@@ -318,7 +321,6 @@ if filtered_records:
     buyers_available = ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""]
     f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
     
-    # CORREÇÃO DE BUG NOS FILTROS: Mapeamento corrigido para evitar que o histórico desapareça ao usar as caixas de seleção
     if f_type != "Todos":
         df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
@@ -346,7 +348,11 @@ if filtered_records:
             
             c_left.markdown(f"**{desc}**")
             c_left.caption(meta)
-            if row["notes"] and str(row["notes"]) != "nan" and str(row["notes"]) != "":
+            
+            # CORREÇÃO DO BUG DO BULLET POINT: Se as observações forem idênticas à descrição ou nulas, não exibe a linha duplicada
+            clean_notes = str(row["notes"]).strip()
+            clean_desc = str(row["description"]).strip()
+            if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
                 c_left.markdown(f"*{row['notes']}*")
                 
             c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
