@@ -148,12 +148,15 @@ section.main > div.block-container {
     height: 2rem;
 }
 
+.sidebar-section-title,
 .credit-cards-title {
     color: #ffffff !important;
+    font-family: inherit !important;
     font-size: 1.05rem !important;
     font-weight: 700 !important;
     line-height: 1.2 !important;
     margin: 0 0 0.8rem 0 !important;
+    letter-spacing: 0 !important;
 }
 
 .credit-cards-line {
@@ -394,7 +397,7 @@ def render_credit_cards_sidebar():
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 # --- PROCESSAMENTO DOS SALDOS ---
-st.sidebar.title("Calendário")
+st.sidebar.markdown('<h3 class="sidebar-section-title">Calendário</h3>', unsafe_allow_html=True)
 current_date = datetime.now()
 selected_month = st.sidebar.selectbox(
     "Mês", 
