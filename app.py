@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import dateutil.relativedelta
-from streamlit_gsheets import GSheetsConnection
+import gspread
 
 # Configuração da página
 st.set_page_config(page_title="Controle Financeiro", layout="wide", initial_sidebar_state="expanded")
@@ -18,8 +18,8 @@ except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
 
-# Montamos as credenciais completas aqui, combinando os dados do segredo com a chave privada de forma aceita pelo sistema
-creds = {
+# Montamos as credenciais oficiais do Google
+creds_dict = {
     "type": "service_account",
     "project_id": PROJECT_ID,
     "private_key_id": PRIVATE_KEY_ID,
@@ -28,18 +28,33 @@ creds = {
     "client_id": CLIENT_ID
 }
 
-# Inicializa a conexão passando as credenciais seguras de forma direta
-conn = st.connection("gsheets", type=GSheetsConnection, **creds)
+# Inicializa o cliente do Google Sheets diretamente através do gspread
+@st.cache_resource
+def get_sheets_client():
+    return gspread.service_account_from_dict(creds_dict)
+
+try:
+    gc = get_sheets_client()
+    sh = gc.open_by_url(SPREADSHEET_URL)
+    worksheet = sh.get_worksheet(0)
+except Exception as e:
+    st.error(f"Erro ao conectar com a planilha: {e}")
+    st.stop()
 
 # Função para buscar dados atualizados da planilha
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        df = conn.read(spreadsheet=SPREADSHEET_URL, usecols=[
-            "type", "description", "amount", "payment_method", 
-            "installments", "installment_value", "card", 
-            "is_for_someone", "bought_by", "created_at", "notes"
-        ])
+        data = worksheet.get_all_records()
+        if not data:
+            return []
+        df = pd.DataFrame(data)
+        # Filtra apenas as colunas necessárias para evitar erros de leitura
+        cols = ["type", "description", "amount", "payment_method", "installments", "installment_value", "card", "is_for_someone", "bought_by", "created_at", "notes"]
+        for col in cols:
+            if col not in df.columns:
+                df[col] = ""
+        df = df[cols]
         df["created_at"] = pd.to_datetime(df["created_at"])
         return df.to_dict(orient="records")
     except Exception:
@@ -69,38 +84,47 @@ total_expense_month = 0.0
 expanded_records = []
 
 for r in records:
-    r_date = r["created_at"]
+    try:
+        r_date = r["created_at"]
+        amount = float(r["amount"]) if r["amount"] != "" else 0.0
+        inst_val = float(r["installment_value"]) if r["installment_value"] != "" else 0.0
+    except Exception:
+        continue
     
     if r["type"] == "entrada":
         if r["payment_method"] == "pix_conta":
-            bank_balance += r["amount"]
+            bank_balance += amount
         elif r["payment_method"] == "dinheiro_vivo":
-            cash_balance += r["amount"]
+            cash_balance += amount
     else:
         if r["payment_method"] == "saque_dinheiro":
-            bank_balance -= r["amount"]
-            cash_balance += r["amount"]
+            bank_balance -= amount
+            cash_balance += amount
         elif r["payment_method"] == "dinheiro_vivo":
-            cash_balance -= r["amount"]
+            cash_balance -= amount
         else: 
-            bank_balance -= r["amount"]
+            bank_balance -= amount
 
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
             expanded_records.append(r)
             if r["type"] == "entrada":
-                total_income_month += r["amount"]
+                total_income_month += amount
             elif r["payment_method"] != "saque_dinheiro":
-                total_expense_month += r["amount"]
+                total_expense_month += amount
     else:
-        for i in range(1, int(r["installments"]) + 1):
+        try:
+            total_inst = int(r["installments"]) if r["installments"] != "" else 1
+        except Exception:
+            total_inst = 1
+        for i in range(1, total_inst + 1):
             inst_date = r_date + dateutil.relativedelta.relativedelta(months=i-1)
             if inst_date.month == selected_month and inst_date.year == selected_year:
                 inst_record = r.copy()
-                inst_record["description"] = f"{r['description']} ({i}/{int(r['installments'])})"
-                inst_record["amount"] = r["installment_value"]
+                inst_record["description"] = f"{r['description']} ({i}/{total_inst})"
+                inst_record["amount"] = inst_val
                 expanded_records.append(inst_record)
-                total_expense_month += r["installment_value"]
+                total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
 st.title("Mini App Finanças")
@@ -167,28 +191,28 @@ with st.form("transaction_form", clear_on_submit=True):
                 
         inst_val = tx_amount / installments if tx_method == "credito_parcelado" else tx_amount
         
-        new_record = {
-            "type": tx_type,
-            "description": tx_desc,
-            "amount": tx_amount,
-            "payment_method": tx_method,
-            "installments": installments,
-            "installment_value": inst_val,
-            "card": card_brand,
-            "is_for_someone": is_for_someone,
-            "bought_by": bought_by,
-            "created_at": tx_date.strftime("%Y-%m-%d %H:%M:%S"),
-            "notes": tx_notes
-        }
+        # Cria uma nova linha alinhada exatamente com as colunas da planilha
+        new_row = [
+            tx_type,
+            tx_desc,
+            tx_amount,
+            tx_method,
+            installments,
+            inst_val,
+            card_brand,
+            "TRUE" if is_for_someone else "FALSE",
+            bought_by,
+            tx_date.strftime("%Y-%m-%d %H:%M:%S"),
+            tx_notes
+        ]
         
-        current_df = pd.DataFrame(records) if records else pd.DataFrame(columns=new_record.keys())
-        new_row_df = pd.DataFrame([new_record])
-        updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
-        
-        conn.update(spreadsheet=SPREADSHEET_URL, data=updated_df)
-        st.cache_data.clear()
-        st.success("Transação salva com sucesso!")
-        st.rerun()
+        try:
+            worksheet.append_row(new_row)
+            st.cache_data.clear()
+            st.success("Transação salva com sucesso!")
+            st.rerun()
+        except Exception as err:
+            st.error(f"Erro ao salvar na planilha: {err}")
 
 st.markdown("---")
 st.header("Histórico do Mês Selecionado")
@@ -215,19 +239,19 @@ if expanded_records:
         prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
         color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
         
-        meta = f"{row['payment_method'].replace('_', ' ').title()} | {row['created_at'].strftime('%d/%m/%Y')}"
+        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {pd.to_datetime(row['created_at']).strftime('%d/%m/%Y')}"
         if row["card"]:
             meta += f" | Cartão: {row['card']}"
-        if row["is_for_someone"] and row["bought_by"]:
+        if row["bought_by"]:
             meta += f" | Compra de: {row['bought_by']}"
             
         with st.container():
             c_left, c_right = st.columns([4, 1])
             c_left.markdown(f"**{row['description']}**")
             c_left.caption(meta)
-            if row["notes"] and str(row["notes"]) != "nan":
+            if row["notes"] and str(row["notes"]) != "nan" and str(row["notes"]) != "":
                 c_left.markdown(f"*{row['notes']}*")
-            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(row['amount'])}</span>", unsafe_allow_html=True)
+            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(row['amount']))}</span>", unsafe_allow_html=True)
             st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
 else:
     st.info("Nenhuma transação registrada para o período selecionado.")
