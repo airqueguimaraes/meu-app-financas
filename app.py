@@ -422,8 +422,8 @@ components.html(
                 paintCollapsedButton(btn);
 
                 label.style.left = (rect.right + 8) + 'px';
-                // Sobe o texto para alinhar com o chevron no topo.
-                label.style.top = (rect.top + rect.height / 2 - 34) + 'px';
+                // Ajuste fino: metade do último deslocamento para alinhar melhor com o chevron.
+                label.style.top = (rect.top + rect.height / 2 - 28) + 'px';
             } else {
                 // Fallback fixo: exatamente a região superior esquerda onde a seta aparece.
                 label.style.left = '64px';
