@@ -389,8 +389,8 @@ if filtered_records:
             meta += f" | Compra de: {row['bought_by']}"
             
         with st.container(border=True):
-            # MUDANÇA AQUI: Dividimos o card em 4 colunas planas, deixando botões estreitos
-            c_left, c_right, c_edit, c_del = st.columns([4.5, 1.5, 0.3, 0.3], vertical_alignment="center")
+            # Usando 3 colunas: Texto, Valor e Botões (onde os botões ficam empilhados na mesma coluna)
+            c_left, c_right, c_actions = st.columns([4.5, 1.5, 1.5], vertical_alignment="center")
             
             with c_left:
                 st.markdown(f"**{desc}**")
@@ -408,14 +408,14 @@ if filtered_records:
             edit_key = f"edit_{row_to_target}_{idx}"
             del_key = f"del_{row_to_target}_{idx}"
             
-            with c_edit:
-                if st.button("✏️", key=edit_key, help="Editar esta transação"):
+            with c_actions:
+                # O parâmetro use_container_width=True faz os botões se esticarem e empilharem perfeitamente
+                if st.button("✏️ Editar transação", key=edit_key, help="Editar esta transação", use_container_width=True):
                     st.session_state.editing_index = row_to_target
                     st.session_state.edit_values = row.copy()
                     st.rerun()
                     
-            with c_del:
-                if st.button("🗑️", key=del_key, help="Excluir permanentemente"):
+                if st.button("🗑️ Excluir transação", key=del_key, help="Excluir permanentemente", use_container_width=True):
                     try:
                         worksheet.delete_rows(row_to_target)
                         st.cache_data.clear()
