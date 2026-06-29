@@ -1046,9 +1046,14 @@ with history_col:
                 ]
                 joined = " ".join(search_parts).lower()
                 joined_digits = "".join(ch for ch in joined if ch.isdigit())
-                return q in joined or (q_digits and q_digits in joined_digits)
+                return bool(q in joined or (q_digits != "" and q_digits in joined_digits))
 
-            df_hist = df_hist[df_hist.apply(row_matches_search, axis=1)]
+            search_mask = df_hist.apply(row_matches_search, axis=1)
+            if not search_mask.empty:
+                search_mask = search_mask.astype(bool)
+                df_hist = df_hist.loc[search_mask]
+            else:
+                df_hist = df_hist.iloc[0:0]
 
         if f_type != "Todos":
             df_hist = df_hist[df_hist["type"] == f_type]
