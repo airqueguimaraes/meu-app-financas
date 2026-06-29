@@ -8,31 +8,64 @@ import os
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 CSS ATUALIZADO: Com as cores do botão de abrir/fechar a barra lateral
+# 🌟 CSS AGRESSIVO: Forçando a remoção do laranja em tudo
 st.markdown("""
 <style>
-/* 1. Fundo Principal */
+/* 1. Cores de Destaque Global (Remove o Laranja) */
+:root {
+    --primary-color: #388253 !important;
+}
+
+/* 2. Fundo Principal */
 .stApp {
     background-color: #ffffff !important;
 }
 
-/* 2. Regiões de Contraste - Barra Lateral Escura */
+/* 3. Barra Lateral Escura */
 [data-testid="stSidebar"] {
     background-color: #262b35 !important;
 }
 [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
     color: #ffffff !important;
 }
-[data-testid="stSidebar"] div[data-baseweb="select"] * {
-    color: #262b35 !important; 
+
+/* 4. Botão de Abrir/Fechar Sidebar */
+/* Menu fechado: botão de abrir em verde */
+[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] *,
+[data-testid="collapsedControl"] svg,
+[data-testid="collapsedControl"] svg path {
+    color: #388253 !important;
+    fill: #388253 !important;
+    stroke: #388253 !important;
 }
 
-/* 3. Apoio - Bordas dos Cards do Histórico */
-div[data-testid="stContainerBorder"] {
+/* Menu aberto: botão de recolher em cinza claro */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] *,
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebarCollapseButton"] svg path {
+    color: #d1d5db !important;
+    fill: #d1d5db !important;
+    stroke: #d1d5db !important;
+}
+
+/* Hover mais suave, sem laranja */
+[data-testid="collapsedControl"]:hover,
+[data-testid="stSidebarCollapseButton"]:hover {
+    background-color: rgba(56, 130, 83, 0.10) !important;
+}
+
+/* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
+div[data-baseweb="select"] > div {
     border-color: #b4b4b4 !important;
 }
+div[data-baseweb="select"]:focus-within {
+    border-color: #318655 !important;
+    box-shadow: 0 0 0 1px #318655 !important;
+}
 
-/* 4. Botões Secundários (Editar/Excluir) */
+/* 6. Botões Secundários */
 div.stButton > button[kind="secondary"] {
     border-color: #b4b4b4 !important;
     color: #262b35 !important;
@@ -41,20 +74,13 @@ div.stButton > button[kind="secondary"] {
 div.stButton > button[kind="secondary"]:hover {
     border-color: #318655 !important;
     color: #318655 !important;
-    background-color: #ffffff !important;
 }
 
-/* 5. Ícone para abrir o menu lateral (quando oculto) - Verde Destaque */
-[data-testid="collapsedControl"] svg {
-    color: #318655 !important;
-    fill: #318655 !important;
-}
-
-/* 6. Ícone para fechar o menu lateral (quando aberto) - Branco */
-[data-testid="stSidebarCollapseButton"] svg, 
-[data-testid="stSidebar"] button[kind="header"] svg {
-    color: #ffffff !important;
-    fill: #ffffff !important;
+/* 7. Botão Primário (Salvar) */
+div.stButton > button[kind="primary"] {
+    background-color: #318655 !important;
+    color: white !important;
+    border: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -66,6 +92,7 @@ try:
     CLIENT_EMAIL = st.secrets["connections"]["gsheets"]["client_email"]
     PRIVATE_KEY_ID = st.secrets["connections"]["gsheets"]["private_key_id"]
     CLIENT_ID = st.secrets["connections"]["gsheets"]["client_id"]
+    PRIVATE_KEY = st.secrets["connections"]["gsheets"]["private_key"]
 except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
@@ -75,7 +102,8 @@ creds_dict = {
     "type": "service_account",
     "project_id": PROJECT_ID,
     "private_key_id": PRIVATE_KEY_ID,
-    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDwCfI60IKUxHI\njh8rHp+MOYkU/gCL8UB/HJIQbn1FJoTYKG1dwrYws3LvjEjQeS98uU3ZViZ0CEhE\n7VMRfseBtkYcGRcO/3tcswR+7avAkruHvihLseA/BOEM8IeVe5YeafqbqQkWzmNp\nyuPKpIApKfZ3y6XZXu7VK53bXpujHxTkSqyrK7WCbzPuGqQ9ycmJqBLze0s+stfr\n2vcRWBKWM7w/NhcV4QxxPrOg9sGPSUibdc0YhCfwkQyOtUVjBn1f4EVdz7b4+4Be\nTwOj5BBGVYchVEx7Pa5MOVljzt5It/KU2ovvz3dC4zPvg8nWYAdxaJiTPbbl1aL7\nieUGh7krAgMBAAECggEACYYt6V6uReZTdS3vt59eepTKEKq9yBFNkWGzJvgultC6\n90bFm3bqemV2GtBOh/t9eKoOGZxRc/p7LwSvsqg3zh3aPL++bs0LaYU5m3C2Qeu3\nEscJGuBlXWuVWkB8YvoyYaRyZw8gZsBVTJkXNY2EwXv4hqJH8tLloprkAVURvtah\nyUU7nYVtLbd9LyJK0EmWJTW3AOhL59yx2RY90lPG25FVkQH/fMe5uRWiTjHTL++4\nb5xKqKJ6u6rP3sI/wB4YtrJff0+4weSzZr2tJjmT0HVZ5/Ms/Kkoq8ALTVBJqo6w\nRBWCZQBIuASGU64nz5Nj8wxs2m3/EKq8NNpyynbZ4QKBgQDya4pQLepgdbtCEahe\nHJn2620u39jwMYyn0uGwtkfq3HmTyW++EeFSepy/Rts/eDp9U7GQ5+8XB7S6qPeH\nWvM3OLnNHXLsoJo5zwkWiyAYBvlNrsNBkuQ45H3mgh5dJ1Yl5owaVorHQAaHhqaF\nUia5rUDPngU6KGFtykzEQZ/2YwKBgQDOt1hLkau7qxO7YNm852dKjW9hN39JUpLc\n1V38SbNODAes2SX0D/9rHNiYyb7o34kCrT214UbrfD7kh/WiAne5Kdihwco9PHwK\nSMAgs2NpSPROpSp4ltKHDF1gyfVPSUgYkV5a6uPHspW6XNYi7PqPPjYHq+7hXQWP\nMoY3HzoomQKBgQC8y8QMbbX7KbWM3vOhV+UQyIlf2DW72tsQWMwsM8oOv2ZwEpFU\nFdjFw3gP/78Az0G+GVBQ6lDqPrYiKTWd1NdWSndpp2W5o9p46yTIydFU5RmDxneK\nujvDky/6NZwwMFKHceXrHTs3skVjhxpo+nHuaV/wUcEAajJ2rvbaYcGSwQKBgQCC\n5VBQ0dY4CNV+0o4t8y3R5IuBuN2t9U6v7aAM8DJNGosFpZ9F05d+IQ76eM2dsmaU\nvlSURildVhiRJ5Kf2wYqxte5XfgNHK7C6FxYmJ87fQnOfwHMyFxZTbgXYOsoIJQ5\nklt4IMLJokjzcHPcO8lRSSh3ZSTnqbqqeWjJoMl4CQKBgQCcbO7Yy9C7kzB7IzFb\nfp5AVpggR2g/IfYt40OXONapYjEWXqqpIMg97/61SriySoBRDsZB5TdtQ8kr87Kr\noshKbctusiiYkx6CRJ4DMtRuOatPr5tALU+sleYkstGoS+4jkH9CmGspB9ckPKEx\ns8kwm6PMzQBUipYtDcKU3y7crA==\n-----END PRIVATE KEY-----\n",
+    "private_key": str(PRIVATE_KEY).replace("\n", "
+"),
     "client_email": CLIENT_EMAIL,
     "client_id": CLIENT_ID,
     "token_uri": "https://oauth2.googleapis.com/token"
