@@ -9,6 +9,7 @@ import base64
 import mimetypes
 import html
 import math
+import time
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -857,12 +858,30 @@ creds_dict = {
 def get_sheets_client():
     return gspread.service_account_from_dict(creds_dict)
 
+def google_sheets_retry(action, *args, attempts=4, base_delay=1.2, **kwargs):
+    """Executa chamadas ao Google Sheets com novas tentativas para erros temporários como 503."""
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return action(*args, **kwargs)
+        except Exception as err:
+            last_error = err
+            error_text = str(err)
+            is_temporary = any(code in error_text for code in ["503", "500", "502", "504", "429"])
+            if not is_temporary or attempt == attempts - 1:
+                raise
+            time.sleep(base_delay * (attempt + 1))
+    raise last_error
+
 try:
     gc = get_sheets_client()
-    sh = gc.open_by_url(SPREADSHEET_URL)
-    worksheet = sh.get_worksheet(0)
+    sh = google_sheets_retry(gc.open_by_url, SPREADSHEET_URL)
+    worksheet = google_sheets_retry(sh.get_worksheet, 0)
 except Exception as e:
-    st.error(f"Erro ao conectar com a planilha: {e}")
+    st.error(
+        "Erro ao conectar com a planilha. O Google Sheets retornou instabilidade temporária. "
+        f"Tente atualizar a página em alguns segundos. Detalhe: {e}"
+    )
     st.stop()
 
 if "editing_index" not in st.session_state:
@@ -940,7 +959,7 @@ def safe_float(val):
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        raw_rows = worksheet.get_all_values()
+        raw_rows = google_sheets_retry(worksheet.get_all_values)
         if len(raw_rows) <= 1:
             return []
             
@@ -1423,15 +1442,16 @@ with main_col:
 
             try:
                 if st.session_state.editing_index is not None:
-                    worksheet.update(
-                        range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
+                    google_sheets_retry(
+                        worksheet.update,
+                        range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}",
                         values=[updated_row],
                         value_input_option="RAW"
                     )
                     st.session_state.editing_index = None
                     st.session_state.edit_values = {}
                 else:
-                    worksheet.append_row(updated_row, value_input_option="RAW")
+                    google_sheets_retry(worksheet.append_row, updated_row, value_input_option="RAW")
                     
                 if is_new_transaction:
                     if tx_type == "entrada" and tx_method != "troco_dinheiro":
@@ -1576,7 +1596,7 @@ with history_col:
                     with btn_col2:
                         if st.button("🗑️ Excluir", key=del_key, help="Excluir permanentemente", use_container_width=True):
                             try:
-                                worksheet.delete_rows(row_to_target)
+                                google_sheets_retry(worksheet.delete_rows, row_to_target)
                                 st.cache_data.clear()
                                 st.rerun()
                             except Exception:
