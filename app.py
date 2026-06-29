@@ -146,16 +146,21 @@ st.markdown("""
 }
 
 .credit-card-info {
+    height: 28px !important;
     margin: 0 !important;
     padding: 0 !important;
-    color: rgba(255, 255, 255, 0.58) !important;
-    font-size: 0.66rem !important;
+    color: rgba(255, 255, 255, 0.62) !important;
+    font-size: 0.64rem !important;
     font-weight: 500 !important;
-    line-height: 1.22 !important;
+    line-height: 1.08 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    transform: translateY(-1px);
 }
 
 .credit-card-info div {
-    margin: 0 0 0.12rem 0 !important;
+    margin: 0 !important;
     padding: 0 !important;
 }
 
@@ -354,7 +359,7 @@ def render_credit_cards_sidebar():
     st.sidebar.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
 
     for card in credit_cards:
-        logo_col, text_col = st.sidebar.columns([0.18, 0.82], gap="small")
+        logo_col, text_col = st.sidebar.columns([0.18, 0.82], gap="small", vertical_alignment="center")
 
         with logo_col:
             if os.path.exists(card["logo"]):
@@ -364,12 +369,7 @@ def render_credit_cards_sidebar():
 
         with text_col:
             st.markdown(
-                f"""
-                <div class="credit-card-info">
-                    <div>Fechamento: {card["closing_date"]}</div>
-                    <div>Vencimento: {card["due_date"]}</div>
-                </div>
-                """,
+                f'<div class="credit-card-info"><div>Fechamento: {card["closing_date"]}</div><div>Vencimento: {card["due_date"]}</div></div>',
                 unsafe_allow_html=True
             )
 
