@@ -8,6 +8,7 @@ import os
 import base64
 import mimetypes
 import html
+import math
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -803,16 +804,36 @@ if "edit_values" not in st.session_state:
 if "form_clear_trigger" not in st.session_state:
     st.session_state.form_clear_trigger = False
 
+def clean_text(val):
+    if val is None or pd.isna(val):
+        return ""
+    text_val = str(val).strip()
+    if text_val.lower() in ["nan", "none", "null"]:
+        return ""
+    return text_val
+
+def is_true_value(val):
+    return val is True or clean_text(val).lower() == "true"
+
 def safe_float(val):
-    if val == "" or pd.isna(val):
+    if val is None or pd.isna(val):
         return 0.0
+
+    raw = str(val).strip()
+    if raw == "" or raw.lower() in ["nan", "none", "null"]:
+        return 0.0
+
     try:
-        return float(val)
+        parsed = float(raw)
     except (ValueError, TypeError):
         try:
-            return float(str(val).strip().replace(".", "").replace(",", "."))
-        except ValueError:
+            parsed = float(raw.replace(".", "").replace(",", "."))
+        except (ValueError, TypeError):
             return 0.0
+
+    if math.isnan(parsed) or math.isinf(parsed):
+        return 0.0
+    return parsed
 
 @st.cache_data(ttl=5)
 def load_data():
@@ -844,19 +865,19 @@ def load_data():
                 
             r = {
                 "sheet_row_idx": idx,
-                "type": str(row[field_map["type"]]).strip(),
-                "description": str(row[field_map["description"]]).strip(),
+                "type": clean_text(row[field_map["type"]]),
+                "description": clean_text(row[field_map["description"]]),
                 "amount": safe_float(row[field_map["amount"]]),
-                "payment_method": str(row[field_map["payment_method"]]).strip(),
-                "installments": str(row[field_map["installments"]]).strip(),
+                "payment_method": clean_text(row[field_map["payment_method"]]),
+                "installments": clean_text(row[field_map["installments"]]),
                 "installment_value": safe_float(row[field_map["installment_value"]]),
-                "card": str(row[field_map["card"]]).strip(),
-                "is_for_someone": str(row[field_map["is_for_someone"]]).strip(),
-                "bought_by": str(row[field_map["bought_by"]]).strip(),
-                "notes": str(row[field_map["notes"]]).strip(),
+                "card": clean_text(row[field_map["card"]]),
+                "is_for_someone": clean_text(row[field_map["is_for_someone"]]),
+                "bought_by": clean_text(row[field_map["bought_by"]]),
+                "notes": clean_text(row[field_map["notes"]]),
             }
             
-            raw_date = str(row[field_map["created_at"]]).strip()
+            raw_date = clean_text(row[field_map["created_at"]])
             try:
                 r["created_at"] = pd.to_datetime(raw_date, errors='raise')
             except Exception:
@@ -997,14 +1018,10 @@ def build_top_expenses_chart_html(filtered_records):
         if r.get("payment_method") == "saque_dinheiro":
             continue
 
-        is_inst = r.get("is_installment_view", False)
-        desc = str(r.get("display_description", r.get("description", ""))) if is_inst else str(r.get("description", ""))
+        is_inst = is_true_value(r.get("is_installment_view", False))
+        desc = clean_text(r.get("display_description", r.get("description", ""))) if is_inst else clean_text(r.get("description", ""))
         amount = r.get("display_amount", r.get("amount", 0)) if is_inst else r.get("amount", 0)
-
-        try:
-            amount_float = float(amount)
-        except Exception:
-            amount_float = 0.0
+        amount_float = safe_float(amount)
 
         if amount_float <= 0:
             continue
@@ -1092,7 +1109,11 @@ for r in records:
             cash_balance += amount
         elif r["payment_method"] == "dinheiro_vivo":
             cash_balance -= amount
-        else: 
+        elif r["payment_method"] == "credito_parcelado":
+            # Compra no crédito parcelado não muda o saldo em banco no ato da compra.
+            # Ela entra apenas como saída mensal, parcela por parcela, no mês correto.
+            pass
+        else:
             bank_balance -= amount
 
     if r["payment_method"] != "credito_parcelado":
@@ -1112,7 +1133,8 @@ for r in records:
             inst_date = r_date + dateutil.relativedelta.relativedelta(months=i-1)
             if inst_date.month == selected_month and inst_date.year == selected_year:
                 inst_record = r.copy()
-                inst_record["display_description"] = f"{r['description']} ({i}/{total_inst})"
+                base_desc = clean_text(r.get("description", "")) or "Compra parcelada"
+                inst_record["display_description"] = f"{base_desc} ({i}/{total_inst})"
                 inst_record["display_amount"] = inst_val
                 inst_record["is_installment_view"] = True
                 inst_record["order_amount"] = inst_val
@@ -1338,13 +1360,10 @@ with history_col:
             q_digits = "".join(ch for ch in q if ch.isdigit())
 
             def row_matches_search(row):
-                is_inst = row.get("is_installment_view", False)
-                desc = str(row.get("display_description", row.get("description", ""))) if is_inst else str(row.get("description", ""))
+                is_inst = is_true_value(row.get("is_installment_view", False))
+                desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
                 val = row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0)
-                try:
-                    val_float = float(val)
-                except Exception:
-                    val_float = 0.0
+                val_float = safe_float(val)
                 search_parts = [
                     desc,
                     str(row.get("notes", "")),
@@ -1388,30 +1407,34 @@ with history_col:
         else:
             st.caption(f"{len(df_hist)} transação(ões) no mês selecionado")
             for idx, row in df_hist.iterrows():
-                is_inst = row.get("is_installment_view", False)
-                desc = row["display_description"] if is_inst else row["description"]
-                val = row["display_amount"] if is_inst else row["amount"]
+                is_inst = is_true_value(row.get("is_installment_view", False))
+                desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
+                val = safe_float(row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0))
+                clean_notes = clean_text(row.get("notes", ""))
+                if not desc:
+                    desc = clean_notes[:60] if clean_notes else "Sem descrição"
                 
                 prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
                 color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
                 
                 dt_obj = pd.to_datetime(row['created_at'])
                 meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
-                if row["card"]:
-                    meta += f" | Cartão: {row['card']}"
-                if row["bought_by"]:
-                    meta += f" | Compra de: {row['bought_by']}"
+                clean_card = clean_text(row.get("card", ""))
+                clean_bought_by = clean_text(row.get("bought_by", ""))
+                if clean_card:
+                    meta += f" | Cartão: {clean_card}"
+                if clean_bought_by:
+                    meta += f" | Compra de: {clean_bought_by}"
                     
                 with st.container(border=True):
                     st.markdown(f"**{desc}**")
                     st.caption(meta)
 
-                    clean_notes = str(row["notes"]).strip()
-                    clean_desc = str(row["description"]).strip()
-                    if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
-                        st.markdown(f"*{row['notes']}*")
+                    clean_desc = clean_text(row.get("description", ""))
+                    if clean_notes and clean_notes != clean_desc:
+                        st.markdown(f"*{clean_notes}*")
 
-                    st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(val)}</span>", unsafe_allow_html=True)
 
                     row_to_target = row["sheet_row_idx"]
                     edit_key = f"edit_{row_to_target}_{idx}"
