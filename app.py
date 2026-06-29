@@ -3,9 +3,10 @@ import pandas as pd
 from datetime import datetime
 import dateutil.relativedelta
 import gspread
+import os
 
-# Configuração da página
-st.set_page_config(page_title="Controle Financeiro", layout="wide", initial_sidebar_state="expanded")
+# 🌟 ATUALIZAÇÃO: Título da aba alterado para "Meu App Finanças"
+st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
 
 # Puxa os dados básicos salvos no Secrets do site
 try:
@@ -188,7 +189,13 @@ for r in records:
                 total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
-st.title("Mini App Finanças")
+# 🌟 LOGO SUBSTITUI O TÍTULO TEXTUAL DO TOPO: Se o arquivo logo.png existir, carrega ele com tamanho otimizado
+if os.path.exists("logo.png"):
+    st.image("logo.png", width=240)
+    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True) # Espaçamento elegante abaixo do logo
+else:
+    # Fallback caso dê algum chabu na imagem do logo, mantendo o novo nome do app em texto
+    st.title("Meu App Finanças")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Saldo em Banco", format_currency(bank_balance))
@@ -389,8 +396,7 @@ if filtered_records:
             meta += f" | Compra de: {row['bought_by']}"
             
         with st.container(border=True):
-            # MUDANÇA AQUI: Dividimos o card em 4 colunas planas, deixando botões estreitos
-            c_left, c_right, c_edit, c_del = st.columns([4.5, 1.5, 0.3, 0.3], vertical_alignment="center")
+            c_left, c_right, c_actions = st.columns([4.5, 1.5, 1.5], vertical_alignment="center")
             
             with c_left:
                 st.markdown(f"**{desc}**")
@@ -408,14 +414,13 @@ if filtered_records:
             edit_key = f"edit_{row_to_target}_{idx}"
             del_key = f"del_{row_to_target}_{idx}"
             
-            with c_edit:
-                if st.button("✏️", key=edit_key, help="Editar esta transação"):
+            with c_actions:
+                if st.button("✏️ Editar transação", key=edit_key, help="Editar esta transação", use_container_width=True):
                     st.session_state.editing_index = row_to_target
                     st.session_state.edit_values = row.copy()
                     st.rerun()
                     
-            with c_del:
-                if st.button("🗑️", key=del_key, help="Excluir permanentemente"):
+                if st.button("🗑️ Excluir transação", key=del_key, help="Excluir permanentemente", use_container_width=True):
                     try:
                         worksheet.delete_rows(row_to_target)
                         st.cache_data.clear()
