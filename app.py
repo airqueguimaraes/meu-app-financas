@@ -47,6 +47,19 @@ section.main > div.block-container {
     color: #ffffff !important;
 }
 
+/* 3.1 Título principal do menu lateral */
+.sidebar-menu-main-title {
+    color: #328655 !important;
+    font-family: inherit !important;
+    font-size: 2.55rem !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    text-align: center !important;
+    margin: 0.2rem 0 3.9rem 0 !important;
+    padding: 0 !important;
+    letter-spacing: -0.02em !important;
+}
+
 /* 4. Botão de Abrir/Fechar Sidebar
    Versão limpa, sem pseudo-elementos, para evitar ícone duplicado.
 */
@@ -141,6 +154,30 @@ section.main > div.block-container {
     fill: #388253 !important;
     stroke: #388253 !important;
     filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
+}
+
+/* Texto ao lado do botão quando o menu lateral está fechado */
+[data-testid="collapsedControl"]::after,
+[data-testid="stSidebarCollapsedControl"]::after {
+    content: "Mostrar menu" !important;
+    color: #6f737b !important;
+    font-family: inherit !important;
+    font-size: 0.95rem !important;
+    font-weight: 400 !important;
+    line-height: 1 !important;
+    margin-left: 0.45rem !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    height: 2rem !important;
+    pointer-events: none !important;
+    transform: translateY(1px) !important;
+}
+
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
+    align-items: center !important;
+    gap: 0 !important;
 }
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
@@ -397,6 +434,7 @@ def render_credit_cards_sidebar():
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 # --- PROCESSAMENTO DOS SALDOS ---
+st.sidebar.markdown('<div class="sidebar-menu-main-title">Menu</div>', unsafe_allow_html=True)
 st.sidebar.markdown('<h3 class="sidebar-section-title">Calendário</h3>', unsafe_allow_html=True)
 current_date = datetime.now()
 selected_month = st.sidebar.selectbox(
