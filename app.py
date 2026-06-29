@@ -30,61 +30,47 @@ st.markdown("""
 }
 
 /* 4. Botão de Abrir/Fechar Sidebar
-   Correção definitiva: esconde o ícone nativo opaco do Streamlit
-   e desenha um chevron limpo por CSS, sem duplicar.
+   Versão limpa, sem pseudo-elementos, para evitar ícone duplicado.
 */
 
-/* MENU ABERTO: botão de recolher sempre evidente, branco no menu escuro */
+/* MENU ABERTO: botão de recolher sempre evidente */
 [data-testid="stSidebarCollapseButton"] {
     opacity: 1 !important;
     visibility: visible !important;
-    pointer-events: auto !important;
-    position: relative !important;
-    width: 48px !important;
-    height: 48px !important;
-    min-width: 48px !important;
-    min-height: 48px !important;
     display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background-color: rgba(255, 255, 255, 0.16) !important;
-    border: 2px solid rgba(255, 255, 255, 0.65) !important;
-    border-radius: 12px !important;
+    pointer-events: auto !important;
+}
+
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="stSidebarCollapseButton"] [role="button"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    background-color: rgba(255, 255, 255, 0.14) !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    border-radius: 10px !important;
+    color: #ffffff !important;
     box-shadow: none !important;
 }
 
-/* Esconde qualquer ícone interno original, que aparece opaco/cinza */
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:focus,
+[data-testid="stSidebarCollapseButton"] button:active,
+[data-testid="stSidebarCollapseButton"] [role="button"]:hover,
+[data-testid="stSidebarCollapseButton"] [role="button"]:focus,
+[data-testid="stSidebarCollapseButton"] [role="button"]:active {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+    border-color: rgba(255, 255, 255, 0.55) !important;
+    color: #ffffff !important;
+}
+
 [data-testid="stSidebarCollapseButton"] svg,
 [data-testid="stSidebarCollapseButton"] svg *,
-[data-testid="stSidebarCollapseButton"] span,
-[data-testid="stSidebarCollapseButton"] i {
-    opacity: 0 !important;
-    visibility: hidden !important;
-}
-
-/* Desenha o ícone branco visível no menu aberto */
-[data-testid="stSidebarCollapseButton"]::after {
-    content: "«" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+[data-testid="stSidebarCollapseButton"] svg path {
+    opacity: 1 !important;
     color: #ffffff !important;
-    font-size: 34px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: none !important;
-}
-
-[data-testid="stSidebarCollapseButton"]:hover,
-[data-testid="stSidebarCollapseButton"]:focus,
-[data-testid="stSidebarCollapseButton"]:active {
-    opacity: 1 !important;
-    background-color: rgba(255, 255, 255, 0.24) !important;
-    border-color: rgba(255, 255, 255, 0.85) !important;
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+    filter: brightness(0) invert(1) !important;
 }
 
 /* MENU FECHADO: botão de abrir verde #388253 sobre fundo branco */
@@ -92,60 +78,51 @@ st.markdown("""
 [data-testid="stSidebarCollapsedControl"] {
     opacity: 1 !important;
     visibility: visible !important;
-    pointer-events: auto !important;
-    position: relative !important;
-    width: 48px !important;
-    height: 48px !important;
-    min-width: 48px !important;
-    min-height: 48px !important;
     display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    pointer-events: auto !important;
+    background-color: #ffffff !important;
+}
+
+[data-testid="collapsedControl"] button,
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] [role="button"],
+[data-testid="stSidebarCollapsedControl"] [role="button"] {
+    opacity: 1 !important;
+    visibility: visible !important;
     background-color: #ffffff !important;
     border: none !important;
-    border-radius: 12px !important;
+    color: #388253 !important;
     box-shadow: none !important;
 }
 
-/* Esconde qualquer ícone interno original cinza */
+[data-testid="collapsedControl"] button:hover,
+[data-testid="collapsedControl"] button:focus,
+[data-testid="collapsedControl"] button:active,
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="stSidebarCollapsedControl"] button:focus,
+[data-testid="stSidebarCollapsedControl"] button:active,
+[data-testid="collapsedControl"] [role="button"]:hover,
+[data-testid="collapsedControl"] [role="button"]:focus,
+[data-testid="collapsedControl"] [role="button"]:active,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:hover,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:focus,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:active {
+    background-color: #ffffff !important;
+    color: #388253 !important;
+    box-shadow: none !important;
+}
+
 [data-testid="collapsedControl"] svg,
 [data-testid="collapsedControl"] svg *,
-[data-testid="collapsedControl"] span,
-[data-testid="collapsedControl"] i,
+[data-testid="collapsedControl"] svg path,
 [data-testid="stSidebarCollapsedControl"] svg,
 [data-testid="stSidebarCollapsedControl"] svg *,
-[data-testid="stSidebarCollapsedControl"] span,
-[data-testid="stSidebarCollapsedControl"] i {
-    opacity: 0 !important;
-    visibility: hidden !important;
-}
-
-/* Desenha o ícone verde visível no menu fechado */
-[data-testid="collapsedControl"]::after,
-[data-testid="stSidebarCollapsedControl"]::after {
-    content: "»" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+[data-testid="stSidebarCollapsedControl"] svg path {
+    opacity: 1 !important;
     color: #388253 !important;
-    font-size: 34px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: none !important;
-}
-
-[data-testid="collapsedControl"]:hover,
-[data-testid="collapsedControl"]:focus,
-[data-testid="collapsedControl"]:active,
-[data-testid="stSidebarCollapsedControl"]:hover,
-[data-testid="stSidebarCollapsedControl"]:focus,
-[data-testid="stSidebarCollapsedControl"]:active {
-    opacity: 1 !important;
-    background-color: #ffffff !important;
+    fill: #388253 !important;
+    stroke: #388253 !important;
+    filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
@@ -153,8 +130,8 @@ div[data-baseweb="select"] > div {
     border-color: #b4b4b4 !important;
 }
 div[data-baseweb="select"]:focus-within {
-    border-color: #388253 !important;
-    box-shadow: 0 0 0 1px #388253 !important;
+    border-color: #318655 !important;
+    box-shadow: 0 0 0 1px #318655 !important;
 }
 
 /* 6. Botões Secundários */
@@ -164,13 +141,13 @@ div.stButton > button[kind="secondary"] {
     background-color: #ffffff !important;
 }
 div.stButton > button[kind="secondary"]:hover {
-    border-color: #388253 !important;
-    color: #388253 !important;
+    border-color: #318655 !important;
+    color: #318655 !important;
 }
 
 /* 7. Botão Primário (Salvar) */
 div.stButton > button[kind="primary"] {
-    background-color: #388253 !important;
+    background-color: #318655 !important;
     color: white !important;
     border: none !important;
 }
@@ -553,7 +530,7 @@ if filtered_records:
         val = row["display_amount"] if is_inst else row["amount"]
         
         prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-        color = "#388253" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
+        color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
         
         dt_obj = pd.to_datetime(row['created_at'])
         meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
