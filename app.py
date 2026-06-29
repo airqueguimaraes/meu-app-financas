@@ -1066,8 +1066,8 @@ body,
     color: #388253 !important;
     -webkit-text-fill-color: #388253 !important;
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 2.05rem !important;
-    font-weight: 900 !important;
+    font-size: 1.55rem !important;
+    font-weight: 800 !important;
     line-height: 1 !important;
     opacity: 1 !important;
     visibility: visible !important;
@@ -1078,9 +1078,16 @@ body,
     transform: translate(-50%, -50%) !important;
 }
 
+/* No desktop, usamos apenas o ícone nativo do Streamlit para evitar duplicidade. */
+@media (min-width: 769px) {
+    #custom-sidebar-open-icon {
+        display: none !important;
+    }
+}
+
 @media (max-width: 768px) {
     #custom-sidebar-open-icon {
-        font-size: 2.25rem !important;
+        font-size: 1.55rem !important;
     }
 }
 
@@ -1187,8 +1194,8 @@ components.html(
                 icon.style.color = '#388253';
                 icon.style.webkitTextFillColor = '#388253';
                 icon.style.fontFamily = 'Arial, Helvetica, sans-serif';
-                icon.style.fontSize = window.innerWidth <= 768 ? '2.25rem' : '2.05rem';
-                icon.style.fontWeight = '900';
+                icon.style.fontSize = window.parent.innerWidth <= 768 ? '1.55rem' : '1.55rem';
+                icon.style.fontWeight = '800';
                 icon.style.lineHeight = '1';
                 icon.style.opacity = '1';
                 icon.style.visibility = 'visible';
@@ -1202,7 +1209,7 @@ components.html(
             return icon;
         }
 
-        function paintCollapsedButton(btn) {
+        function paintCollapsedButton(btn, isMobile) {
             if (!btn) return;
 
             // No iOS o Streamlit pode deixar o ícone translúcido aplicando
@@ -1227,16 +1234,22 @@ components.html(
             btn.style.mixBlendMode = 'normal';
 
             btn.querySelectorAll('svg, svg *, path').forEach((el) => {
-                // O SVG nativo é escondido porque em iOS/Streamlit ele pode continuar
-                // translúcido mesmo com fill/stroke forçados. O ícone visível é
-                // desenhado por #custom-sidebar-open-icon, sem bloquear o clique.
                 el.style.setProperty('color', '#388253', 'important');
                 el.style.setProperty('fill', '#388253', 'important');
                 el.style.setProperty('stroke', '#388253', 'important');
-                el.style.setProperty('opacity', '0', 'important');
-                el.style.setProperty('visibility', 'hidden', 'important');
                 el.style.setProperty('filter', 'none', 'important');
                 el.style.setProperty('mix-blend-mode', 'normal', 'important');
+
+                if (isMobile) {
+                    // No mobile/iOS, o SVG nativo pode continuar translúcido.
+                    // Escondemos só no mobile e usamos o ícone customizado alinhado ao texto.
+                    el.style.setProperty('opacity', '0', 'important');
+                    el.style.setProperty('visibility', 'hidden', 'important');
+                } else {
+                    // No desktop, mantemos o SVG nativo para não duplicar a seta.
+                    el.style.setProperty('opacity', '1', 'important');
+                    el.style.setProperty('visibility', 'visible', 'important');
+                }
             });
         }
 
@@ -1253,27 +1266,31 @@ components.html(
                 return;
             }
 
+            const isMobile = window.parent.innerWidth <= 768;
             const btn = findCollapsedButton(doc);
             if (btn) {
                 const rect = btn.getBoundingClientRect();
-                paintCollapsedButton(btn);
+                paintCollapsedButton(btn, isMobile);
 
-                // Posiciona o ícone customizado exatamente sobre a seta nativa.
-                icon.style.left = (rect.left + rect.width / 2) + 'px';
-                icon.style.top = (rect.top + rect.height / 2) + 'px';
+                const labelY = rect.top + rect.height / 2 - (isMobile ? 9 : 18);
 
                 label.style.left = (rect.right + 8) + 'px';
-                // Ajuste fino já aprovado para mobile.
-                label.style.top = (rect.top + rect.height / 2 - 18) + 'px';
+                label.style.top = labelY + 'px';
+
+                // Desktop: não usamos overlay para evitar seta duplicada.
+                // Mobile: usamos overlay pequeno e centralizado no eixo do texto.
+                icon.style.left = (rect.left + rect.width / 2) + 'px';
+                icon.style.top = labelY + 'px';
+                icon.style.fontSize = isMobile ? '1.55rem' : '1.55rem';
             } else {
-                // Fallback fixo: região superior esquerda onde a seta aparece.
+                const isMobileFallback = window.parent.innerWidth <= 768;
                 icon.style.left = '28px';
-                icon.style.top = '42px';
+                icon.style.top = isMobileFallback ? '33px' : '42px';
                 label.style.left = '64px';
-                label.style.top = '24px';
+                label.style.top = isMobileFallback ? '33px' : '24px';
             }
 
-            icon.style.display = 'block';
+            icon.style.display = (window.parent.innerWidth <= 768) ? 'block' : 'none';
             label.style.display = 'block';
         }
 
