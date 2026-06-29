@@ -42,15 +42,28 @@ except Exception as e:
     st.error(f"Erro ao conectar com a planilha: {e}")
     st.stop()
 
-# Função para buscar dados atualizados da planilha
+# Gerenciador de estado para edição
+if "editing_index" not in st.session_state:
+    st.session_state.editing_index = None
+if "edit_values" not in st.session_state:
+    st.session_state.edit_values = {}
+
+# Função para buscar dados atualizados da planilha (incluindo o índice da linha real)
 @st.cache_data(ttl=5)
 def load_data():
     try:
         data = worksheet.get_all_records()
         if not data:
             return []
-        df = pd.DataFrame(data)
-        cols = ["type", "description", "amount", "payment_method", "installments", "installment_value", "card", "is_for_someone", "bought_by", "created_at", "notes"]
+        
+        expanded = []
+        # Percorre as linhas guardando a posição real delas na planilha (gspread começa em 1, cabeçalho é 1, dados começam em 2)
+        for idx, r in enumerate(data, start=2):
+            r["sheet_row_idx"] = idx
+            expanded.append(r)
+            
+        df = pd.DataFrame(expanded)
+        cols = ["type", "description", "amount", "payment_method", "installments", "installment_value", "card", "is_for_someone", "bought_by", "created_at", "notes", "sheet_row_idx"]
         for col in cols:
             if col not in df.columns:
                 df[col] = ""
@@ -66,7 +79,13 @@ records = load_data()
 def format_currency(val):
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# --- PROCESSAMENTO DOS DADOS ---
+# Tradução de dias da semana para PT-BR
+def format_br_date(dt):
+    dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+    dia_semana = dias[dt.weekday()]
+    return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
+
+# --- PROCESSAMENTO DOS DOS SALDOS ---
 st.sidebar.title("Calendário")
 current_date = datetime.now()
 selected_month = st.sidebar.selectbox(
@@ -81,7 +100,7 @@ bank_balance = 0.0
 cash_balance = 0.0
 total_income_month = 0.0
 total_expense_month = 0.0
-expanded_records = []
+filtered_records = []
 
 for r in records:
     try:
@@ -91,6 +110,7 @@ for r in records:
     except Exception:
         continue
     
+    # Cálculo global de saldos acumulados
     if r["type"] == "entrada":
         if r["payment_method"] == "pix_conta":
             bank_balance += amount
@@ -105,9 +125,10 @@ for r in records:
         else: 
             bank_balance -= amount
 
+    # Filtro do mês selecionado para o Histórico
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
-            expanded_records.append(r)
+            filtered_records.append(r)
             if r["type"] == "entrada":
                 total_income_month += amount
             elif r["payment_method"] != "saque_dinheiro":
@@ -121,9 +142,10 @@ for r in records:
             inst_date = r_date + dateutil.relativedelta.relativedelta(months=i-1)
             if inst_date.month == selected_month and inst_date.year == selected_year:
                 inst_record = r.copy()
-                inst_record["description"] = f"{r['description']} ({i}/{total_inst})"
-                inst_record["amount"] = inst_val
-                expanded_records.append(inst_record)
+                inst_record["display_description"] = f"{r['description']} ({i}/{total_inst})"
+                inst_record["display_amount"] = inst_val
+                inst_record["is_installment_view"] = True
+                filtered_records.append(inst_record)
                 total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
@@ -137,11 +159,20 @@ col4.metric("Saídas (Mês)", format_currency(total_expense_month))
 
 st.markdown("---")
 
-st.header("Nova Transação")
+# Se estiver em modo edição, exibe um aviso amigável no formulário
+if st.session_state.editing_index is not None:
+    st.warning(f"✏️ Você está EDITANDO a transação: **{st.session_state.edit_values.get('description')}**")
+    if st.button("Cancelar Edição"):
+        st.session_state.editing_index = None
+        st.session_state.edit_values = {}
+        st.rerun()
 
-# SEÇÃO DE CONTROLE REATIVO (Fora do form para atualizar na hora)
+st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
+
+# SEÇÃO DE CONTROLE REATIVO
 t_col1, t_col2 = st.columns(2)
-tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"])
+default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
+tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
 
 if tx_type == "entrada":
     method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
@@ -151,42 +182,53 @@ else:
         "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
         "credito_parcelado": "Crédito Parcelado"
     }
-    
-tx_method = t_col2.selectbox("Método", options=list(method_opts.keys()), format_func=lambda x: method_opts[x])
 
-# Inicialização de variáveis que dependem das caixas de seleção reativas
-installments = 1
-card_brand = ""
-is_for_someone = False
-bought_by = ""
-tx_date = datetime.now()
+method_keys = list(method_opts.keys())
+default_method_str = st.session_state.edit_values.get("payment_method", method_keys[0])
+default_method_idx = method_keys.index(default_method_str) if default_method_str in method_keys else 0
 
-# CORREÇÃO 1 & 2: Controles do Crédito Parcelado reativos na tela principal
+tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
+
+installments = int(st.session_state.edit_values.get("installments", 1))
+card_brand = st.session_state.edit_values.get("card", "")
+is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
+bought_by = st.session_state.edit_values.get("bought_by", "")
+
+# Carrega a data antiga se for edição
+if st.session_state.editing_index is not None:
+    tx_date = pd.to_datetime(st.session_state.edit_values.get("created_at", datetime.now()))
+else:
+    tx_date = datetime.now()
+
 if tx_method == "credito_parcelado" and tx_type == "saida":
     st.markdown("##### 💳 Detalhes do Parcelamento")
     c_col1, c_col2 = st.columns(2)
-    # Mudado min_value para 1 para permitir crédito à vista
-    installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=1)
-    card_brand = c_col2.selectbox("Cartão", ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"])
+    installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments))
     
-    is_for_someone = st.checkbox("Compra de alguém")
+    card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"]
+    default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
+    card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx)
+    
+    is_for_someone = st.checkbox("Compra de alguém", value=is_for_someone)
     if is_for_someone:
-        bought_by = st.text_input("Quem comprou?", placeholder="Ex: Nome da pessoa")
+        bought_by = st.text_input("Quem comprou?", value=bought_by, placeholder="Ex: Nome da pessoa")
 
-# CORREÇÃO 3: Controle da data customizada reativo na tela principal
-use_custom_date = st.checkbox("Usar data diferente de hoje")
+# CORREÇÃO 1: Formato de calendário totalmente brasileiro (PT-BR)
+use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None)
 if use_custom_date:
-    custom_d = st.date_input("Data da transação", datetime.now().date())
-    tx_date = datetime.combine(custom_d, datetime.now().time())
+    custom_d = st.date_input("Data da transação", tx_date.date())
+    # Exibe em formato textual amigável brasileiro logo abaixo do seletor
+    st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
+    tx_date = datetime.combine(custom_d, tx_date.time())
 
-# FORMULÁRIO TEXTUAL DE ENVIO (Para performance)
+# FORMULÁRIO TEXTUAL DE ENVIO
 with st.form("transaction_form", clear_on_submit=True):
     d_col1, d_col2 = st.columns(2)
-    tx_desc = d_col1.text_input("Descrição", placeholder="Ex: Mercado")
-    tx_amount = d_col2.number_input("Valor Total (R$)", min_value=0.01, step=0.01, format="%.2f")
-    tx_notes = st.text_area("Comentários ou observações", placeholder="Ex: Detalhes da compra...")
+    tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado")
+    tx_amount = d_col2.number_input("Valor Total (R$)", min_value=0.01, step=0.01, value=float(st.session_state.edit_values.get("amount", 0.01)), format="%.2f")
+    tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...")
     
-    submit_btn = st.form_submit_button("Adicionar Transação")
+    submit_btn = st.form_submit_button("Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação")
     
     if submit_btn:
         if not tx_desc:
@@ -198,7 +240,7 @@ with st.form("transaction_form", clear_on_submit=True):
                 
         inst_val = tx_amount / installments if tx_method == "credito_parcelado" else tx_amount
         
-        new_row = [
+        updated_row = [
             tx_type,
             tx_desc,
             tx_amount,
@@ -213,9 +255,17 @@ with st.form("transaction_form", clear_on_submit=True):
         ]
         
         try:
-            worksheet.append_row(new_row)
+            if st.session_state.editing_index is not None:
+                # CORREÇÃO 2.1: Sobrescreve a linha real que foi editada
+                worksheet.update(range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", values=[updated_row])
+                st.session_state.editing_index = None
+                st.session_state.edit_values = {}
+                st.success("Transação atualizada com sucesso!")
+            else:
+                worksheet.append_row(updated_row)
+                st.success("Transação salva com sucesso!")
+                
             st.cache_data.clear()
-            st.success("Transação salva com sucesso!")
             st.rerun()
         except Exception as err:
             st.error(f"Erro ao salvar na planilha: {err}")
@@ -223,41 +273,80 @@ with st.form("transaction_form", clear_on_submit=True):
 st.markdown("---")
 st.header("Histórico do Mês Selecionado")
 
-if expanded_records:
-    df = pd.DataFrame(expanded_records)
+if filtered_records:
+    df_hist = pd.DataFrame(filtered_records)
     f_col1, f_col2, f_col3 = st.columns(3)
     f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
     
-    cards_available = ["Todos"] + [c for c in df["card"].dropna().unique() if str(c) != ""]
+    cards_available = ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""]
     f_card = f_col2.selectbox("Filtrar por Cartão", cards_available)
     
-    buyers_available = ["Todos"] + [b for b in df["bought_by"].dropna().unique() if str(b) != ""]
+    buyers_available = ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""]
     f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
     
     if f_type != "Todos":
-        df = df[df["type"] == f_type]
+        df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
-        df = df[df["card"] == f_card]
+        df_hist = df_hist[df_hist["card"] == f_card]
     if f_buyer != "Todos":
-        df = df[df["bought_by"] == f_buyer]
+        df_hist = df_hist[df_hist["bought_by"] == f_buyer]
         
-    for _, row in df.sort_values(by="created_at", ascending=False).iterrows():
+    for idx, row in df_hist.sort_values(by="created_at", ascending=False).iterrows():
+        # Define os dados visíveis se for parcela ou registro normal
+        is_inst = row.get("is_installment_view", False)
+        desc = row["display_description"] if is_inst else row["description"]
+        val = row["display_amount"] if is_inst else row["amount"]
+        
         prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
         color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
         
-        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {pd.to_datetime(row['created_at']).strftime('%d/%m/%Y')}"
+        # Formata a data de exibição no histórico para PT-BR
+        dt_obj = pd.to_datetime(row['created_at'])
+        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
         if row["card"]:
             meta += f" | Cartão: {row['card']}"
         if row["bought_by"]:
             meta += f" | Compra de: {row['bought_by']}"
             
         with st.container():
-            c_left, c_right = st.columns([4, 1])
-            c_left.markdown(f"**{row['description']}**")
+            c_left, c_right, c_actions = st.columns([3.5, 1, 0.5])
+            
+            # Coluna da esquerda: Textos e metadados
+            c_left.markdown(f"**{desc}**")
             c_left.caption(meta)
             if row["notes"] and str(row["notes"]) != "nan" and str(row["notes"]) != "":
                 c_left.markdown(f"*{row['notes']}*")
-            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(row['amount']))}</span>", unsafe_allow_html=True)
+                
+            # Coluna do meio: Valor financeiro
+            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
+            
+            # CORREÇÃO 2.2: Botões de Ações (Apenas no registro pai, para não quebrar parcelas individuais)
+            row_to_target = row["sheet_row_idx"]
+            
+            # Cria chaves únicas para os botões não darem conflito
+            edit_key = f"edit_{row_to_target}_{idx}"
+            del_key = f"del_{row_to_target}_{idx}"
+            
+            # Organiza os botões verticalmente ou lado a lado na mini coluna
+            with c_actions:
+                sub_col1, sub_col2 = st.columns(2)
+                
+                # Ação de Editar
+                if sub_col1.button("✏️", key=edit_key, help="Editar esta transação"):
+                    st.session_state.editing_index = row_to_target
+                    st.session_state.edit_values = row.copy()
+                    st.rerun()
+                    
+                # Ação de Excluir
+                if sub_col2.button("🗑️", key=del_key, help="Excluir permanentemente"):
+                    try:
+                        worksheet.delete_rows(row_to_target)
+                        st.cache_data.clear()
+                        st.success("Removido!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Erro")
+                        
             st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
 else:
     st.info("Nenhuma transação registrada para o período selecionado.")
