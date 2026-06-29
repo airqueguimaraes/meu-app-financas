@@ -164,7 +164,7 @@ if st.session_state.editing_index is not None:
 
 st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
 
-# SEÇÃO DE SELEÇÃO DINÂMICA COMPLETA (Livre de form estático para evitar resets)
+# SEÇÃO DE CONTROLE REATIVO
 t_col1, t_col2 = st.columns(2)
 default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
 tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
@@ -184,19 +184,23 @@ default_method_idx = method_keys.index(default_method_str) if default_method_str
 
 tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
 
-# Captura de valores iniciais robustos
-try:
-    raw_amount = st.session_state.edit_values.get("amount", 0.01)
-    default_amount = float(raw_amount) if raw_amount != "" else 0.01
-except ValueError:
-    default_amount = 0.01
+# Formata o valor padrão vindo da edição de forma legível (ex: 76.36 vira "76,36")
+if st.session_state.editing_index is not None:
+    try:
+        raw_amount = st.session_state.edit_values.get("amount", "0,01")
+        default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
+    except Exception:
+        default_amount_str = "0,01"
+else:
+    default_amount_str = ""
 
-# Criação de chaves únicas dinâmicas baseadas no índice de edição para forçar o reset visual do Streamlit
 state_key = "new" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
 
 d_col1, d_col2 = st.columns(2)
 tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
-tx_amount = d_col2.number_input("Valor Total (R$)", min_value=0.01, step=0.01, value=default_amount, format="%.2f", key=f"amount_{state_key}")
+
+# MUDANÇA CRÍTICA: Trocado para text_input para aceitar vírgula e ponto livremente sem reset de milissegundo
+tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 76,36", key=f"amount_str_{state_key}")
 
 installments = int(st.session_state.edit_values.get("installments", 1))
 card_brand = st.session_state.edit_values.get("card", "")
@@ -229,7 +233,6 @@ if use_custom_date:
 
 tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...", key=f"notes_{state_key}")
 
-# BOTÃO DE ENVIO DIRETO (Substitui o st.form por ação direta sem lag de memória)
 button_label = "Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação"
 submit_btn = st.button(button_label, type="primary")
 
@@ -241,7 +244,18 @@ if submit_btn:
             st.error("Por favor, preencha a descrição.")
             st.stop()
             
-    processed_amount = float(tx_amount)
+    if not tx_amount_str:
+        st.error("Por favor, insira o valor da transação.")
+        st.stop()
+        
+    # ENGINE DE LIMPEZA BR: Pega o texto digitado, limpa espaços, troca vírgula por ponto e converte para decimal puro
+    try:
+        clean_amount_str = tx_amount_str.strip().replace(",", ".")
+        processed_amount = float(clean_amount_str)
+    except ValueError:
+        st.error("Valor inválido! Por favor, digite apenas números e use ponto ou vírgula para os centavos (Ex: 76,36).")
+        st.stop()
+        
     inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
     updated_row = [
@@ -263,10 +277,8 @@ if submit_btn:
             worksheet.update(range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", values=[updated_row])
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
-            st.success("Transação atualizada com sucesso!")
         else:
             worksheet.append_row(updated_row)
-            st.success("Transação salva com sucesso!")
             
         st.cache_data.clear()
         st.rerun()
@@ -290,9 +302,9 @@ if filtered_records:
     if f_type != "Todos":
         df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
-        df_hist = df_hist[df_card == f_card]
+        df_hist = df_hist[df_hist["card"] == f_card]
     if f_buyer != "Todos":
-        df_hist = df_hist[df_buyer == f_buyer]
+        df_hist = df_hist[df_hist["bought_by"] == f_buyer]
         
     for idx, row in df_hist.sort_values(by="created_at", ascending=False).iterrows():
         is_inst = row.get("is_installment_view", False)
