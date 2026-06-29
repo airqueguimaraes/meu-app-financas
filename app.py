@@ -50,23 +50,25 @@ if "edit_values" not in st.session_state:
 if "form_clear_trigger" not in st.session_state:
     st.session_state.form_clear_trigger = False
 
-# Conversor limpo para floats numéricos vindos do Sheets
-def clean_float(val):
+# Forçador simples de tipo numérico seguro
+def safe_float(val):
     if val == "" or pd.isna(val):
         return 0.0
-    if isinstance(val, (int, float)):
-        return float(val)
-    val_str = str(val).strip().replace(".", "").replace(",", ".")
     try:
-        return float(val_str)
-    except ValueError:
-        return 0.0
+        return float(val)
+    except (ValueError, TypeError):
+        # Fallback caso ainda exista alguma string formatada legada nas células antigas
+        try:
+            val_str = str(val).strip().replace(".", "").replace(",", ".")
+            return float(val_str)
+        except ValueError:
+            return 0.0
 
 # Função para buscar dados atualizados da planilha
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        # CORREÇÃO 1 DO CLAUDE: Retorna valores brutos direto da API sem passar pelo locale regional
+        # Puxa os dados puros (floats legítimos do Python) conforme a sugestão matadora do Claude
         data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         if not data:
             return []
@@ -74,8 +76,9 @@ def load_data():
         expanded = []
         for idx, r in enumerate(data, start=2):
             r["sheet_row_idx"] = idx
-            r["amount"] = clean_float(r.get("amount", 0.0))
-            r["installment_value"] = clean_float(r.get("installment_value", 0.0))
+            # Garante a conversão direta e sem risco de crash no loop
+            r["amount"] = safe_float(r.get("amount", 0.0))
+            r["installment_value"] = safe_float(r.get("installment_value", 0.0))
             expanded.append(r)
             
         df = pd.DataFrame(expanded)
@@ -86,7 +89,7 @@ def load_data():
         df = df[cols]
         df["created_at"] = pd.to_datetime(df["created_at"])
         return df.to_dict(orient="records")
-    except Exception:
+    except Exception as e:
         return []
 
 # Carrega os registros
@@ -125,6 +128,7 @@ for r in records:
     except Exception:
         continue
     
+    # Atualização global dos saldos gerais da conta
     if r["type"] == "entrada":
         if r["payment_method"] == "pix_conta":
             bank_balance += amount
@@ -139,6 +143,7 @@ for r in records:
         else: 
             bank_balance -= amount
 
+    # Separação e somatório do histórico do mês selecionado
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
             filtered_records.append(r)
@@ -277,8 +282,7 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # CORREÇÃO 2 DO CLAUDE: Envia float Python puro arredondado para duas casas decimais
-    # Chega na API do Google Sheets como um 'JSON Number' puro, ignorando qualquer conflito cultural de locale
+    # Envia float Python legítimo arredondado
     updated_row = [
         tx_type,
         tx_desc,
