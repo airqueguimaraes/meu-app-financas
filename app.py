@@ -856,7 +856,7 @@ div.stButton > button[kind="primary"] {
 }
 .install-mini-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.85rem;
     margin: 1rem 0 0 0;
 }
@@ -868,6 +868,16 @@ div.stButton > button[kind="primary"] {
     color: #384050;
     font-size: 0.86rem;
     font-weight: 700;
+}
+.install-final-note {
+    background: #e8f2ff;
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+    color: #0f5fb3;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-top: 2.9rem;
 }
 @media (max-width: 1100px) {
     .install-app-grid {
@@ -2111,7 +2121,7 @@ def render_install_app_page():
         return
 
     st.markdown(
-        '<div class="install-note-box">Para instalar, abra este app pelo Safari no iPhone. Depois siga os passos abaixo. O app continuará usando a versão hospedada no Streamlit e os dados seguirão sendo gravados no Google Sheets.</div>',
+        '<div class="install-note-box">Para instalar, abra este app pelo Safari no iPhone. Depois siga os passos abaixo. O app continuará rodando na web!</div>',
         unsafe_allow_html=True
     )
 
@@ -2130,12 +2140,14 @@ def render_install_app_page():
         '<div class="install-mini-list">'
         '<div class="install-mini-card">✅ Ícone próprio na tela inicial</div>'
         '<div class="install-mini-card">✅ Acesso mais rápido ao app</div>'
-        '<div class="install-mini-card">✅ Menu de instalação oculto depois de instalado</div>'
         '</div>',
         unsafe_allow_html=True
     )
 
-    st.info("Depois de instalar, abra o app pelo ícone da tela inicial. Nessa condição, a opção de instalação será ocultada automaticamente da sidebar.")
+    st.markdown(
+        '<div class="install-final-note">Depois de instalar, abra o app pelo ícone da tela inicial. Nessa condição, a opção de instalação será ocultada automaticamente da sidebar.</div>',
+        unsafe_allow_html=True
+    )
 
 
 records = load_data()
