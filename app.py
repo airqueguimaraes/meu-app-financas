@@ -1727,13 +1727,13 @@ def build_existing_transaction_keys(records):
     return keys
 
 def render_import_csv_page(selected_month, selected_year, records):
-    st.markdown("# Importar CSV")
+    st.markdown("# Importe os dados do seu banco")
     st.markdown(
         '<div class="page-kicker">Envie um extrato CSV, revise as linhas detectadas e importe apenas as transações aprovadas para sua planilha.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
-        '<div class="import-note-box">O CSV não é salvo no GitHub, no Drive ou na pasta do app. Ele é lido temporariamente, mostrado para revisão e descartado após a sessão. Apenas as transações confirmadas são gravadas no Google Sheets.</div>',
+        '<div class="import-note-box">O arquivo que você importar não é salvo em nenhum local, ou pasta do app. Ele é lido temporariamente para sua segurança.</div>',
         unsafe_allow_html=True
     )
 
@@ -1927,7 +1927,7 @@ render_transaction_animation()
 current_date = datetime.now()
 
 st.sidebar.markdown('<div class="sidebar-nav-title">Navegação</div>', unsafe_allow_html=True)
-nav_options = ["🏠 Home", "📌 Contas e assinaturas", "📥 Importar CSV"]
+nav_options = ["🏠 Home", "📌 Contas e assinaturas", "🏦 Trazer do banco"]
 selected_nav = st.sidebar.radio(
     "Navegação",
     nav_options,
