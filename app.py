@@ -5,8 +5,66 @@ import dateutil.relativedelta
 import gspread
 import os
 
-# 🌟 ATUALIZAÇÃO: Título da aba alterado para "Meu App Finanças"
+# Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
+
+# 🌟 INJEÇÃO DA SUA PALETA DE CORES PERSONALIZADA (CSS)
+st.markdown("""
+<style>
+/* 1. Fundo Principal */
+.stApp {
+    background-color: #ffffff !important;
+}
+
+/* 2. Regiões de Contraste - Barra Lateral */
+[data-testid="stSidebar"] {
+    background-color: #262b35 !important;
+}
+/* Força textos e títulos da barra lateral a ficarem brancos para leitura no fundo escuro */
+[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
+    color: #ffffff !important;
+}
+/* Customiza as caixas de seleção da barra lateral para combinarem com o contraste */
+[data-testid="stSidebar"] div[data-baseweb="select"] {
+    background-color: #323844 !important;
+    border-color: #b4b4b4 !important;
+}
+[data-testid="stSidebar"] div[data-baseweb="select"] * {
+    color: #ffffff !important;
+}
+
+/* 3. Destaques - Botão Primário (Adicionar Transação) */
+div.stButton > button[type="primary"] {
+    background-color: #318655 !important;
+    border-color: #318655 !important;
+    color: #ffffff !important;
+}
+
+/* 4. Esmaecidos - Efeito Hover (Passar o mouse) no botão principal */
+div.stButton > button[type="primary"]:hover {
+    background-color: #83ba97 !important;
+    border-color: #83ba97 !important;
+    color: #ffffff !important;
+}
+
+/* 5. Apoio - Bordas dos Cards do Histórico */
+div[data-testid="stContainerBorder"] {
+    border-color: #b4b4b4 !important;
+}
+
+/* Customização secundária dos botões comuns (Editar/Excluir) usando os tons de Apoio e Destaque */
+div.stButton > button {
+    border-color: #b4b4b4 !important;
+    color: #262b35 !important;
+    background-color: #ffffff !important;
+}
+div.stButton > button:hover {
+    border-color: #318655 !important;
+    color: #318655 !important;
+    background-color: #ffffff !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Puxa os dados básicos salvos no Secrets do site
 try:
@@ -189,12 +247,10 @@ for r in records:
                 total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
-# 🌟 LOGO SUBSTITUI O TÍTULO TEXTUAL DO TOPO: Se o arquivo logo.png existir, carrega ele com tamanho otimizado
 if os.path.exists("logo.png"):
     st.image("logo.png", width=240)
-    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True) # Espaçamento elegante abaixo do logo
+    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
 else:
-    # Fallback caso dê algum chabu na imagem do logo, mantendo o novo nome do app em texto
     st.title("Meu App Finanças")
 
 col1, col2, col3, col4 = st.columns(4)
@@ -386,7 +442,9 @@ if filtered_records:
         val = row["display_amount"] if is_inst else row["amount"]
         
         prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-        color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
+        
+        # 🌟 ATUALIZAÇÃO: Alinhando as cores textuais (+) com o tom de Destaque da paleta (#318655)
+        color = "#318655" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
         
         dt_obj = pd.to_datetime(row['created_at'])
         meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
