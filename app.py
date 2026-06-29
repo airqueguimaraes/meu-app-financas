@@ -471,6 +471,135 @@ components.html(
     width=0,
 )
 
+# Ajuste visual do date_input para PT-BR.
+# O parâmetro format="DD/MM/YYYY" define o campo; este JS traduz somente o calendário pop-up.
+components.html(
+    """
+    <script>
+    (function () {
+        function getParentDocument() {
+            try {
+                return window.parent && window.parent.document ? window.parent.document : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        const exactTranslations = {
+            'January': 'Janeiro',
+            'February': 'Fevereiro',
+            'March': 'Março',
+            'April': 'Abril',
+            'May': 'Maio',
+            'June': 'Junho',
+            'July': 'Julho',
+            'August': 'Agosto',
+            'September': 'Setembro',
+            'October': 'Outubro',
+            'November': 'Novembro',
+            'December': 'Dezembro',
+            'Jan': 'Jan',
+            'Feb': 'Fev',
+            'Mar': 'Mar',
+            'Apr': 'Abr',
+            'Jun': 'Jun',
+            'Jul': 'Jul',
+            'Aug': 'Ago',
+            'Sep': 'Set',
+            'Oct': 'Out',
+            'Nov': 'Nov',
+            'Dec': 'Dez',
+            'Su': 'Dom',
+            'Mo': 'Seg',
+            'Tu': 'Ter',
+            'We': 'Qua',
+            'Th': 'Qui',
+            'Fr': 'Sex',
+            'Sa': 'Sáb',
+            'Sunday': 'Domingo',
+            'Monday': 'Segunda',
+            'Tuesday': 'Terça',
+            'Wednesday': 'Quarta',
+            'Thursday': 'Quinta',
+            'Friday': 'Sexta',
+            'Saturday': 'Sábado'
+        };
+
+        const monthPattern = 'January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
+        const weekdayPattern = 'Su|Mo|Tu|We|Th|Fr|Sa|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday';
+        const calendarPattern = new RegExp(monthPattern + '|' + weekdayPattern);
+
+        function getCalendarRoots(doc) {
+            const selectors = [
+                '[data-baseweb="popover"]',
+                '[data-baseweb="calendar"]',
+                '[role="dialog"]'
+            ];
+
+            const roots = [];
+            selectors.forEach((selector) => {
+                doc.querySelectorAll(selector).forEach((el) => {
+                    const text = el.innerText || '';
+                    if (calendarPattern.test(text) || /20[0-9]{2}/.test(text)) {
+                        roots.push(el);
+                    }
+                });
+            });
+
+            return [...new Set(roots)];
+        }
+
+        function translateRoot(root) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+
+            nodes.forEach((node) => {
+                const original = node.nodeValue;
+                const trimmed = original.trim();
+                if (!trimmed) return;
+
+                if (exactTranslations[trimmed]) {
+                    node.nodeValue = original.replace(trimmed, exactTranslations[trimmed]);
+                }
+            });
+        }
+
+        function tuneCalendarTypography(root) {
+            root.querySelectorAll('*').forEach((el) => {
+                const txt = (el.innerText || '').trim();
+                if (/^(Dom|Seg|Ter|Qua|Qui|Sex|Sáb)$/.test(txt)) {
+                    el.style.fontSize = '0.9rem';
+                    el.style.fontWeight = '600';
+                }
+            });
+        }
+
+        function updateDateLocale() {
+            const doc = getParentDocument();
+            if (!doc || !doc.body) return;
+            doc.documentElement.setAttribute('lang', 'pt-BR');
+
+            getCalendarRoots(doc).forEach((root) => {
+                translateRoot(root);
+                tuneCalendarTypography(root);
+            });
+        }
+
+        const doc = getParentDocument();
+        if (!doc || !doc.body) return;
+
+        updateDateLocale();
+        const observer = new MutationObserver(updateDateLocale);
+        observer.observe(doc.body, { childList: true, subtree: true, characterData: true });
+        window.setInterval(updateDateLocale, 500);
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
+
 # Puxa os dados básicos salvos no Secrets do site
 try:
     SPREADSHEET_URL = st.secrets["connections"]["gsheets"]["spreadsheet_url"]
@@ -789,7 +918,7 @@ if tx_method == "credito_parcelado" and tx_type == "saida":
 
 use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None, key=f"cust_date_{state_key}")
 if use_custom_date:
-    custom_d = st.date_input("Data da transação", tx_date.date(), key=f"date_pick_{state_key}")
+    custom_d = st.date_input("Data da transação", tx_date.date(), format="DD/MM/YYYY", key=f"date_pick_{state_key}")
     st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
     tx_date = datetime.combine(custom_d, tx_date.time())
 
