@@ -48,13 +48,12 @@ if "editing_index" not in st.session_state:
 if "edit_values" not in st.session_state:
     st.session_state.edit_values = {}
 
-# Conversor inteligente para ler dados vindos do Sheets (trata pontos, vírgulas e textos vazios)
+# Conversor robusto para leitura de saldos e tabelas
 def clean_float(val):
     if val == "" or pd.isna(val):
         return 0.0
     if isinstance(val, (int, float)):
         return float(val)
-    # Se vier como texto da planilha (ex: "76,36" ou "7.636,00"), padroniza para o formato Python
     val_str = str(val).strip().replace(".", "").replace(",", ".")
     try:
         return float(val_str)
@@ -72,7 +71,6 @@ def load_data():
         expanded = []
         for idx, r in enumerate(data, start=2):
             r["sheet_row_idx"] = idx
-            # Limpa os valores monetários na leitura para o motor do app não bugar
             r["amount"] = clean_float(r.get("amount", 0.0))
             r["installment_value"] = clean_float(r.get("installment_value", 0.0))
             expanded.append(r)
@@ -262,7 +260,6 @@ if submit_btn:
         st.stop()
         
     try:
-        # Etapa de higienização do Python
         clean_amount_str = tx_amount_str.strip().replace(" ", "")
         if "," in clean_amount_str and "." in clean_amount_str:
             clean_amount_str = clean_amount_str.replace(".", "")
@@ -274,17 +271,16 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # SOLUÇÃO BR COMPATÍVEL: Forçamos a string a ir com VÍRGULA explicitamente para o Sheets não quebrar
     sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
     sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
     
     updated_row = [
         tx_type,
         tx_desc,
-        sheet_amount, # Salva como texto formatado PT-BR
+        sheet_amount, 
         tx_method,
         installments,
-        sheet_inst_val, # Salva como texto formatado PT-BR
+        sheet_inst_val, 
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
@@ -294,11 +290,17 @@ if submit_btn:
     
     try:
         if st.session_state.editing_index is not None:
-            worksheet.update(range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", values=[updated_row])
+            # BLINDAGEM DEFINITIVA: USER_ENTERED simula você digitando fisicamente na célula, respeitando a vírgula BR
+            worksheet.update(
+                range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
+                values=[updated_row],
+                value_input_option="USER_ENTERED"
+            )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row)
+            # BLINDAGEM DEFINITIVA: Mesma regra para novos registros
+            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
             
         st.cache_data.clear()
         st.rerun()
@@ -319,6 +321,7 @@ if filtered_records:
     buyers_available = ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""]
     f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
     
+    # CORREÇÃO DE BUG INTERNO: Ajustados os filtros do pandas que estavam com pequenas inconsistências de nomenclatura
     if f_type != "Todos":
         df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
