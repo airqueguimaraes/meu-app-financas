@@ -240,13 +240,6 @@ section.main > div.block-container {
     white-space: nowrap !important;
 }
 
-.credit-card-limit {
-    color: rgba(255, 255, 255, 0.62) !important;
-    font-size: 0.65rem !important;
-    font-weight: 600 !important;
-    line-height: 1.06 !important;
-    white-space: nowrap !important;
-}
 
 .credit-card-info {
     color: rgba(255, 255, 255, 0.62) !important;
@@ -1793,13 +1786,13 @@ def image_to_data_uri(image_path):
 
 def render_credit_cards_sidebar():
     credit_cards = [
-        {"name": "Nubank", "limit": "R$1.600", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
-        {"name": "Mercado Pago", "limit": "R$13.200", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
-        {"name": "Inter", "limit": "R$9.300", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
-        {"name": "Nu PJ", "limit": "R$4.700", "logo": "nu-pj.png", "closing_date": "10", "due_date": "17"},
-        {"name": "PicPay", "limit": "R$2.040", "logo": "picpay.webp", "closing_date": "02", "due_date": "10"},
-        {"name": "Amazon Prime", "limit": "R$1.400", "logo": "prime.png", "closing_date": "25", "due_date": "10"},
-        {"name": "Mei", "limit": "R$950", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
+        {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
+        {"name": "Mercado Pago", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
+        {"name": "Inter", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
+        {"name": "Nu PJ", "logo": "nu-pj.png", "closing_date": "10", "due_date": "17"},
+        {"name": "PicPay", "logo": "picpay.webp", "closing_date": "02", "due_date": "10"},
+        {"name": "Amazon Prime", "logo": "prime.png", "closing_date": "25", "due_date": "10"},
+        {"name": "Mei", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
     ]
 
     st.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
@@ -1819,7 +1812,7 @@ def render_credit_cards_sidebar():
 
         with name_col:
             st.markdown(
-                f'<div class="credit-card-name-block"><div class="credit-card-name">{card["name"]}</div><div class="credit-card-limit">{card["limit"]}</div></div>',
+                f'<div class="credit-card-name-block"><div class="credit-card-name">{card["name"]}</div></div>',
                 unsafe_allow_html=True
             )
 
