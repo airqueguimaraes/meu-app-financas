@@ -4,7 +4,6 @@ from datetime import datetime
 import dateutil.relativedelta
 import gspread
 import os
-import base64
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -127,12 +126,11 @@ st.markdown("""
 }
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
-.credit-cards-sidebar {
-    margin-top: 2.6rem;
-    padding: 0 0.35rem;
+.credit-cards-spacer {
+    height: 2.6rem;
 }
 
-.credit-cards-sidebar h3 {
+.credit-cards-title {
     color: #ffffff !important;
     font-size: 1.45rem !important;
     font-weight: 700 !important;
@@ -140,49 +138,28 @@ st.markdown("""
     margin: 0 0 1rem 0 !important;
 }
 
-.credit-cards-sidebar .credit-cards-line {
+.credit-cards-line {
     width: 100%;
     height: 1px;
     background-color: rgba(255, 255, 255, 0.12);
-    margin-bottom: 1.5rem;
+    margin: 0 0 1.5rem 0;
 }
 
-.credit-card-item {
-    margin: 0 0 1.7rem 0;
-    padding-left: 1.1rem;
-}
-
-.credit-card-logo {
-    display: block;
-    width: 72px;
-    max-height: 72px;
-    object-fit: contain;
-    margin-bottom: 0.85rem;
-    border-radius: 2px;
-}
-
-.credit-card-logo-placeholder {
-    width: 72px;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.85rem;
-    border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-align: center;
-    padding: 0.4rem;
-}
-
-.credit-card-item p {
-    margin: 0.18rem 0 !important;
+.credit-card-date {
+    margin: 0.18rem 0 0.18rem 1.1rem !important;
     color: rgba(255, 255, 255, 0.58) !important;
     font-size: 1.02rem !important;
     font-weight: 600 !important;
     line-height: 1.28 !important;
+}
+
+.credit-card-gap {
+    height: 1.35rem;
+}
+
+[data-testid="stSidebar"] [data-testid="stImage"] {
+    margin-left: 1.1rem;
+    margin-bottom: 0.65rem;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
@@ -334,65 +311,26 @@ def format_br_date(dt):
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
 
-def image_to_base64_data_uri(image_path):
-    if not os.path.exists(image_path):
-        return None
-
-    ext = os.path.splitext(image_path)[1].lower().replace(".", "")
-    mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
-
-    with open(image_path, "rb") as img_file:
-        encoded = base64.b64encode(img_file.read()).decode("utf-8")
-
-    return f"data:image/{mime};base64,{encoded}"
-
 def render_credit_cards_sidebar():
     credit_cards = [
-        {
-            "name": "Nubank",
-            "logo": "nubank.png",
-            "closing_date": "02",
-            "due_date": "09",
-        },
-        {
-            "name": "Mercado Pago",
-            "logo": "mercado-pago.png",
-            "closing_date": "05",
-            "due_date": "10",
-        },
-        {
-            "name": "Inter",
-            "logo": "inter.png",
-            "closing_date": "06",
-            "due_date": "12",
-        },
+        {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
+        {"name": "Mercado Pago", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
+        {"name": "Inter", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
     ]
 
-    cards_html = """
-    <div class="credit-cards-sidebar">
-        <h3>Cartões de crédito</h3>
-        <div class="credit-cards-line"></div>
-    """
+    st.sidebar.markdown('<div class="credit-cards-spacer"></div>', unsafe_allow_html=True)
+    st.sidebar.markdown('<h3 class="credit-cards-title">Cartões de crédito</h3>', unsafe_allow_html=True)
+    st.sidebar.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
 
     for card in credit_cards:
-        logo_uri = image_to_base64_data_uri(card["logo"])
-
-        if logo_uri:
-            logo_html = f'<img class="credit-card-logo" src="{logo_uri}" alt="{card["name"]}">'
+        if os.path.exists(card["logo"]):
+            st.sidebar.image(card["logo"], width=72)
         else:
-            logo_html = f'<div class="credit-card-logo-placeholder">{card["name"]}</div>'
+            st.sidebar.markdown(f'**{card["name"]}**')
 
-        cards_html += f"""
-        <div class="credit-card-item">
-            {logo_html}
-            <p>Fechamento: {card["closing_date"]}</p>
-            <p>Vencimento: {card["due_date"]}</p>
-        </div>
-        """
-
-    cards_html += "</div>"
-
-    st.sidebar.markdown(cards_html, unsafe_allow_html=True)
+        st.sidebar.markdown(f'<p class="credit-card-date">Fechamento: {card["closing_date"]}</p>', unsafe_allow_html=True)
+        st.sidebar.markdown(f'<p class="credit-card-date">Vencimento: {card["due_date"]}</p>', unsafe_allow_html=True)
+        st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 # --- PROCESSAMENTO DOS SALDOS ---
 st.sidebar.title("Calendário")
