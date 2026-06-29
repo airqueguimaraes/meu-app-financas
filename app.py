@@ -161,28 +161,99 @@ section.main > div.block-container {
     filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
 }
 
-/* Texto ao lado do botão quando o menu lateral está fechado */
-[data-testid="collapsedControl"]::after,
-[data-testid="stSidebarCollapsedControl"]::after {
+/* Texto ao lado do botão quando o menu lateral está fechado
+   O Streamlit muda o seletor desse botão entre versões, então miramos tanto
+   nos data-testid quanto nos aria-label/title de abrir/expandir. */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
+    align-items: center !important;
+    gap: 0 !important;
+    overflow: visible !important;
+    width: auto !important;
+    max-width: none !important;
+    z-index: 999999 !important;
+}
+
+[data-testid="collapsedControl"] button,
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] [role="button"],
+[data-testid="stSidebarCollapsedControl"] [role="button"],
+button[aria-label*="Open" i],
+button[aria-label*="Expand" i],
+button[aria-label*="Abrir" i],
+button[aria-label*="Expandir" i],
+button[aria-label*="Mostrar" i],
+button[title*="Open" i],
+button[title*="Expand" i],
+button[title*="Abrir" i],
+button[title*="Expandir" i],
+button[title*="Mostrar" i] {
+    position: relative !important;
+    overflow: visible !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 2rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    background-color: #ffffff !important;
+    color: #388253 !important;
+    box-shadow: none !important;
+}
+
+[data-testid="collapsedControl"] button::after,
+[data-testid="stSidebarCollapsedControl"] button::after,
+[data-testid="collapsedControl"] [role="button"]::after,
+[data-testid="stSidebarCollapsedControl"] [role="button"]::after,
+button[aria-label*="Open" i]::after,
+button[aria-label*="Expand" i]::after,
+button[aria-label*="Abrir" i]::after,
+button[aria-label*="Expandir" i]::after,
+button[aria-label*="Mostrar" i]::after,
+button[title*="Open" i]::after,
+button[title*="Expand" i]::after,
+button[title*="Abrir" i]::after,
+button[title*="Expandir" i]::after,
+button[title*="Mostrar" i]::after {
     content: "Mostrar menu" !important;
+    position: absolute !important;
+    left: calc(100% + 0.45rem) !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
     color: #6f737b !important;
     font-family: inherit !important;
     font-size: 0.95rem !important;
     font-weight: 400 !important;
     line-height: 1 !important;
-    margin-left: 0.45rem !important;
     white-space: nowrap !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    height: 2rem !important;
     pointer-events: none !important;
-    transform: translateY(1px) !important;
 }
 
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapsedControl"] {
-    align-items: center !important;
-    gap: 0 !important;
+button[aria-label*="Open" i] svg,
+button[aria-label*="Expand" i] svg,
+button[aria-label*="Abrir" i] svg,
+button[aria-label*="Expandir" i] svg,
+button[aria-label*="Mostrar" i] svg,
+button[title*="Open" i] svg,
+button[title*="Expand" i] svg,
+button[title*="Abrir" i] svg,
+button[title*="Expandir" i] svg,
+button[title*="Mostrar" i] svg,
+button[aria-label*="Open" i] svg *,
+button[aria-label*="Expand" i] svg *,
+button[aria-label*="Abrir" i] svg *,
+button[aria-label*="Expandir" i] svg *,
+button[aria-label*="Mostrar" i] svg *,
+button[title*="Open" i] svg *,
+button[title*="Expand" i] svg *,
+button[title*="Abrir" i] svg *,
+button[title*="Expandir" i] svg *,
+button[title*="Mostrar" i] svg * {
+    color: #388253 !important;
+    fill: #388253 !important;
+    stroke: #388253 !important;
+    opacity: 1 !important;
+    filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
 }
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
