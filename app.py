@@ -18,7 +18,7 @@ except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
 
-# Montamos as credenciais oficiais do Google (agora com o token_uri obrigatório incluído)
+# Montamos as credenciais oficiais do Google
 creds_dict = {
     "type": "service_account",
     "project_id": PROJECT_ID,
@@ -221,5 +221,36 @@ if expanded_records:
     f_col1, f_col2, f_col3 = st.columns(3)
     f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
     
-    cards_available = ["Todos"] + [c for c in df["card"].dropna().unique() if c != ""]
-    f_card = f_col2.selectbox("Filtrar por Cartão",
+    cards_available = ["Todos"] + [c for c in df["card"].dropna().unique() if str(c) != ""]
+    f_card = f_col2.selectbox("Filtrar por Cartão", cards_available)
+    
+    buyers_available = ["Todos"] + [b for b in df["bought_by"].dropna().unique() if str(b) != ""]
+    f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
+    
+    if f_type != "Todos":
+        df = df[df["type"] == f_type]
+    if f_card != "Todos":
+        df = df[df["card"] == f_card]
+    if f_buyer != "Todos":
+        df = df[df["bought_by"] == f_buyer]
+        
+    for _, row in df.sort_values(by="created_at", ascending=False).iterrows():
+        prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
+        color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
+        
+        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {pd.to_datetime(row['created_at']).strftime('%d/%m/%Y')}"
+        if row["card"]:
+            meta += f" | Cartão: {row['card']}"
+        if row["bought_by"]:
+            meta += f" | Compra de: {row['bought_by']}"
+            
+        with st.container():
+            c_left, c_right = st.columns([4, 1])
+            c_left.markdown(f"**{row['description']}**")
+            c_left.caption(meta)
+            if row["notes"] and str(row["notes"]) != "nan" and str(row["notes"]) != "":
+                c_left.markdown(f"*{row['notes']}*")
+            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(row['amount']))}</span>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
+else:
+    st.info("Nenhuma transação registrada para o período selecionado.")
