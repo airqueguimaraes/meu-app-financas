@@ -16,7 +16,7 @@ import unicodedata
 import hashlib
 
 # Configuração da página
-st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="collapsed")
 
 # 🌟 CSS AGRESSIVO: Forçando a remoção do laranja em tudo
 st.markdown("""
@@ -890,6 +890,107 @@ div.stButton > button[kind="primary"] {
 @media (max-width: 650px) {
     .install-app-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+
+/* 11. Correções para navegação mobile/iOS
+   - força tema claro na área central
+   - aumenta contraste de títulos, labels e textos
+   - impede selects/inputs escuros no Safari/iOS
+*/
+html,
+body,
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stMain"] * {
+    color-scheme: light !important;
+}
+
+@media (max-width: 768px) {
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMain"] .block-container {
+        background-color: #ffffff !important;
+    }
+
+    [data-testid="stMain"] h1,
+    [data-testid="stMain"] h2,
+    [data-testid="stMain"] h3,
+    [data-testid="stMain"] h4,
+    [data-testid="stMain"] h5,
+    [data-testid="stMain"] h6,
+    [data-testid="stMain"] p,
+    [data-testid="stMain"] span,
+    [data-testid="stMain"] label,
+    [data-testid="stMain"] label p,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"],
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"] span {
+        color: #2f3341 !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #2f3341 !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stTextInput"] input,
+    [data-testid="stMain"] [data-testid="stNumberInput"] input,
+    [data-testid="stMain"] [data-testid="stDateInput"] input,
+    [data-testid="stMain"] [data-testid="stTextArea"] textarea,
+    [data-testid="stMain"] textarea,
+    [data-testid="stMain"] div[data-baseweb="select"] > div,
+    [data-testid="stMain"] div[data-baseweb="select"] input,
+    [data-testid="stMain"] div[data-baseweb="select"] span,
+    [data-testid="stMain"] div[data-baseweb="select"] div {
+        background-color: #f1f3f6 !important;
+        color: #2f3341 !important;
+        -webkit-text-fill-color: #2f3341 !important;
+        border-color: #d1d5db !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] input::placeholder,
+    [data-testid="stMain"] textarea::placeholder {
+        color: #8a8f9a !important;
+        -webkit-text-fill-color: #8a8f9a !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] div[data-baseweb="select"] svg,
+    [data-testid="stMain"] div[data-baseweb="select"] svg path {
+        color: #2f3341 !important;
+        fill: #2f3341 !important;
+        stroke: #2f3341 !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stCheckbox"] label,
+    [data-testid="stMain"] [data-testid="stCheckbox"] label p,
+    [data-testid="stMain"] [data-testid="stCheckbox"] span {
+        color: #2f3341 !important;
+        -webkit-text-fill-color: #2f3341 !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stCheckbox"] div[role="checkbox"] {
+        background-color: #ffffff !important;
+        border-color: #d1d5db !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stCheckbox"] div[role="checkbox"][aria-checked="true"] {
+        background-color: #388253 !important;
+        border-color: #388253 !important;
+    }
+
+    /* Mantém a Home como experiência inicial no celular: sidebar recolhida por padrão */
+    [data-testid="stSidebar"] {
+        color-scheme: light !important;
+    }
+
+    /* Em telas muito estreitas, evita que o formulário encoste nas bordas */
+    [data-testid="stMain"] .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
 }
 
