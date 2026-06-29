@@ -1084,6 +1084,44 @@ body,
     }
 }
 
+
+/* Logo do topo: troca automaticamente entre versão clara e dark mode */
+.app-top-logo {
+    width: var(--app-logo-width, 240px) !important;
+    max-width: 100% !important;
+}
+
+.app-top-logo-img {
+    width: var(--app-logo-width, 240px) !important;
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+}
+
+.app-top-logo-dark {
+    display: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .app-top-logo-light {
+        display: none !important;
+    }
+
+    .app-top-logo-dark {
+        display: block !important;
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .app-top-logo-light {
+        display: block !important;
+    }
+
+    .app-top-logo-dark {
+        display: none !important;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -2119,6 +2157,31 @@ def image_to_data_uri(image_path):
         encoded = base64.b64encode(img_file.read()).decode("utf-8")
     return f"data:{mime_type};base64,{encoded}"
 
+def render_app_logo(width=240):
+    # Renderiza o logo correto conforme o tema do dispositivo.
+    # No modo claro usa logo.png; no modo escuro usa logo-dark.png quando existir.
+    has_light_logo = os.path.exists("logo.png")
+    has_dark_logo = os.path.exists("logo-dark.png")
+
+    if has_light_logo and has_dark_logo:
+        light_logo_uri = image_to_data_uri("logo.png")
+        dark_logo_uri = image_to_data_uri("logo-dark.png")
+        st.markdown(
+            f"""
+            <div class="app-top-logo" style="--app-logo-width: {width}px;">
+                <img class="app-top-logo-img app-top-logo-light" src="{light_logo_uri}" alt="Meu App Finanças - modo claro" />
+                <img class="app-top-logo-img app-top-logo-dark" src="{dark_logo_uri}" alt="Meu App Finanças - modo escuro" />
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    elif has_light_logo:
+        st.image("logo.png", width=width)
+    elif has_dark_logo:
+        st.image("logo-dark.png", width=width)
+    else:
+        st.title("Meu App Finanças")
+
 def render_credit_cards_sidebar():
     credit_cards = [
         {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
@@ -2856,10 +2919,7 @@ if page_key == "home":
     with main_col:
         logo_col, chart_col = st.columns([0.34, 0.66], gap="large", vertical_alignment="center")
         with logo_col:
-            if os.path.exists("logo.png"):
-                st.image("logo.png", width=240)
-            else:
-                st.title("Meu App Finanças")
+            render_app_logo(width=240)
         with chart_col:
             st.markdown(build_top_expenses_chart_html(filtered_records), unsafe_allow_html=True)
 
