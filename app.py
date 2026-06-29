@@ -8,7 +8,7 @@ import os
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
 
-# 🌟 INJEÇÃO DA SUA PALETA DE CORES PERSONALIZADA (CSS)
+# 🌟 CSS REDUZIDO: Apenas para a Barra Lateral Escura e Bordas Finas
 st.markdown("""
 <style>
 /* 1. Fundo Principal */
@@ -16,63 +16,32 @@ st.markdown("""
     background-color: #ffffff !important;
 }
 
-/* 2. Regiões de Contraste - Barra Lateral */
+/* 2. Regiões de Contraste - Barra Lateral Escura */
 [data-testid="stSidebar"] {
     background-color: #262b35 !important;
 }
-/* Força textos e títulos da barra lateral a ficarem brancos para leitura no fundo escuro */
 [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
     color: #ffffff !important;
 }
-
-/* Garante que o texto DENTRO da caixa branca de seleção seja escuro */
 [data-testid="stSidebar"] div[data-baseweb="select"] * {
     color: #262b35 !important; 
 }
 
-/* 3. Destaques - Botão Primário (Adicionar Transação) */
-div.stButton > button[type="primary"] {
-    background-color: #318655 !important;
-    border-color: #318655 !important;
-    color: #ffffff !important;
-}
-
-/* 4. Esmaecidos - Efeito Hover (Passar o mouse) no botão principal */
-div.stButton > button[type="primary"]:hover {
-    background-color: #83ba97 !important;
-    border-color: #83ba97 !important;
-    color: #ffffff !important;
-}
-
-/* 5. Apoio - Bordas dos Cards do Histórico */
+/* 3. Apoio - Bordas dos Cards do Histórico */
 div[data-testid="stContainerBorder"] {
     border-color: #b4b4b4 !important;
 }
 
-/* Customização secundária dos botões comuns (Editar/Excluir) usando os tons de Apoio e Destaque */
-div.stButton > button {
+/* 4. Botões Secundários (Editar/Excluir) */
+div.stButton > button[kind="secondary"] {
     border-color: #b4b4b4 !important;
     color: #262b35 !important;
     background-color: #ffffff !important;
 }
-div.stButton > button:hover {
+div.stButton > button[kind="secondary"]:hover {
     border-color: #318655 !important;
     color: #318655 !important;
     background-color: #ffffff !important;
-}
-
-/* 6. Remove o brilho vermelho nativo ao focar (clicar) nos campos */
-div[data-baseweb="select"] > div:focus-within,
-div[data-baseweb="input"] > div:focus-within,
-div[data-baseweb="textarea"] > div:focus-within {
-    border-color: #318655 !important;
-    box-shadow: 0 0 0 1px #318655 !important;
-}
-
-/* 7. Caixas de Seleção (Checkboxes) - Cor Destaque quando ativadas */
-div[data-testid="stCheckbox"] div[data-baseweb="checkbox"] input[type="checkbox"]:checked + div {
-    background-color: #318655 !important;
-    border-color: #318655 !important;
 }
 </style>
 """, unsafe_allow_html=True)
