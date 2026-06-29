@@ -333,12 +333,34 @@ section.main > div.block-container {
     letter-spacing: 0 !important;
 }
 
+/* Seta do expander bem visível no fundo escuro da sidebar */
 [data-testid="stSidebar"] [data-testid="stExpander"] summary svg,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary svg *,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary svg path {
-    color: rgba(255, 255, 255, 0.82) !important;
-    fill: rgba(255, 255, 255, 0.82) !important;
-    stroke: rgba(255, 255, 255, 0.82) !important;
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg path,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"],
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stExpanderToggleIcon"] *,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stIconMaterial"],
+[data-testid="stSidebar"] [data-testid="stExpander"] summary [data-testid="stIconMaterial"] * {
+    color: #e5e7eb !important;
+    fill: #e5e7eb !important;
+    stroke: #e5e7eb !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary > div:first-child {
+    color: #e5e7eb !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover svg,
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover svg *,
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover svg path,
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover [data-testid="stExpanderToggleIcon"],
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover [data-testid="stExpanderToggleIcon"] * {
+    color: #ffffff !important;
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+    opacity: 1 !important;
 }
 
 [data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
