@@ -18,17 +18,18 @@ except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
 
-# Montamos as credenciais oficiais do Google
+# Montamos as credenciais oficiais do Google (agora com o token_uri obrigatório incluído)
 creds_dict = {
     "type": "service_account",
     "project_id": PROJECT_ID,
     "private_key_id": PRIVATE_KEY_ID,
     "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDwCfI60IKUxHI\njh8rHp+MOYkU/gCL8UB/HJIQbn1FJoTYKG1dwrYws3LvjEjQeS98uU3ZViZ0CEhE\n7VMRfseBtkYcGRcO/3tcswR+7avAkruHvihLseA/BOEM8IeVe5YeafqbqQkWzmNp\nyuPKpIApKfZ3y6XZXu7VK53bXpujHxTkSqyrK7WCbzPuGqQ9ycmJqBLze0s+stfr\n2vcRWBKWM7w/NhcV4QxxPrOg9sGPSUibdc0YhCfwkQyOtUVjBn1f4EVdz7b4+4Be\nTwOj5BBGVYchVEx7Pa5MOVljzt5It/KU2ovvz3dC4zPvg8nWYAdxaJiTPbbl1aL7\nieUGh7krAgMBAAECggEACYYt6V6uReZTdS3vt59eepTKEKq9yBFNkWGzJvgultC6\n90bFm3bqemV2GtBOh/t9eKoOGZxRc/p7LwSvsqg3zh3aPL++bs0LaYU5m3C2Qeu3\nEscJGuBlXWuVWkB8YvoyYaRyZw8gZsBVTJkXNY2EwXv4hqJH8tLloprkAVURvtah\nyUU7nYVtLbd9LyJK0EmWJTW3AOhL59yx2RY90lPG25FVkQH/fMe5uRWiTjHTL++4\nb5xKqKJ6u6rP3sI/wB4YtrJff0+4weSzZr2tJjmT0HVZ5/Ms/Kkoq8ALTVBJqo6w\nRBWCZQBIuASGU64nz5Nj8wxs2m3/EKq8NNpyynbZ4QKBgQDya4pQLepgdbtCEahe\nHJn2620u39jwMYyn0uGwtkfq3HmTyW++EeFSepy/Rts/eDp9U7GQ5+8XB7S6qPeH\nWvM3OLnNHXLsoJo5zwkWiyAYBvlNrsNBkuQ45H3mgh5dJ1Yl5owaVorHQAaHhqaF\nUia5rUDPngU6KGFtykzEQZ/2YwKBgQDOt1hLkau7qxO7YNm852dKjW9hN39JUpLc\n1V38SbNODAes2SX0D/9rHNiYyb7o34kCrT214UbrfD7kh/WiAne5Kdihwco9PHwK\nSMAgs2NpSPROpSp4ltKHDF1gyfVPSUgYkV5a6uPHspW6XNYi7PqPPjYHq+7hXQWP\nMoY3HzoomQKBgQC8y8QMbbX7KbWM3vOhV+UQyIlf2DW72tsQWMwsM8oOv2ZwEpFU\nFdjFw3gP/78Az0G+GVBQ6lDqPrYiKTWd1NdWSndpp2W5o9p46yTIydFU5RmDxneK\nujvDky/6NZwwMFKHceXrHTs3skVjhxpo+nHuaV/wUcEAajJ2rvbaYcGSwQKBgQCC\n5VBQ0dY4CNV+0o4t8y3R5IuBuN2t9U6v7aAM8DJNGosFpZ9F05d+IQ76eM2dsmaU\nvlSURildVhiRJ5Kf2wYqxte5XfgNHK7C6FxYmJ87fQnOfwHMyFxZTbgXYOsoIJQ5\nklt4IMLJokjzcHPcO8lRSSh3ZSTnqbqqeWjJoMl4CQKBgQCcbO7Yy9C7kzB7IzFb\nfp5AVpggR2g/IfYt40OXONapYjEWXqqpIMg97/61SriySoBRDsZB5TdtQ8kr87Kr\noshKbctusiiYkx6CRJ4DMtRuOatPr5tALU+sleYkstGoS+4jkH9CmGspB9ckPKEx\ns8kwm6PMzQBUipYtDcKU3y7crA==\n-----END PRIVATE KEY-----\n",
     "client_email": CLIENT_EMAIL,
-    "client_id": CLIENT_ID
+    "client_id": CLIENT_ID,
+    "token_uri": "https://oauth2.googleapis.com/token"
 }
 
-# Inicializa o cliente do Google Sheets diretamente através do gspread
+# Inicializa o cliente do Google Sheets através do gspread
 @st.cache_resource
 def get_sheets_client():
     return gspread.service_account_from_dict(creds_dict)
@@ -49,7 +50,6 @@ def load_data():
         if not data:
             return []
         df = pd.DataFrame(data)
-        # Filtra apenas as colunas necessárias para evitar erros de leitura
         cols = ["type", "description", "amount", "payment_method", "installments", "installment_value", "card", "is_for_someone", "bought_by", "created_at", "notes"]
         for col in cols:
             if col not in df.columns:
@@ -191,7 +191,6 @@ with st.form("transaction_form", clear_on_submit=True):
                 
         inst_val = tx_amount / installments if tx_method == "credito_parcelado" else tx_amount
         
-        # Cria uma nova linha alinhada exatamente com as colunas da planilha
         new_row = [
             tx_type,
             tx_desc,
@@ -223,35 +222,4 @@ if expanded_records:
     f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
     
     cards_available = ["Todos"] + [c for c in df["card"].dropna().unique() if c != ""]
-    f_card = f_col2.selectbox("Filtrar por Cartão", cards_available)
-    
-    buyers_available = ["Todos"] + [b for b in df["bought_by"].dropna().unique() if b != ""]
-    f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
-    
-    if f_type != "Todos":
-        df = df[df["type"] == f_type]
-    if f_card != "Todos":
-        df = df[df["card"] == f_card]
-    if f_buyer != "Todos":
-        df = df[df["bought_by"] == f_buyer]
-        
-    for _, row in df.sort_values(by="created_at", ascending=False).iterrows():
-        prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-        color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
-        
-        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {pd.to_datetime(row['created_at']).strftime('%d/%m/%Y')}"
-        if row["card"]:
-            meta += f" | Cartão: {row['card']}"
-        if row["bought_by"]:
-            meta += f" | Compra de: {row['bought_by']}"
-            
-        with st.container():
-            c_left, c_right = st.columns([4, 1])
-            c_left.markdown(f"**{row['description']}**")
-            c_left.caption(meta)
-            if row["notes"] and str(row["notes"]) != "nan" and str(row["notes"]) != "":
-                c_left.markdown(f"*{row['notes']}*")
-            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(row['amount']))}</span>", unsafe_allow_html=True)
-            st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
-else:
-    st.info("Nenhuma transação registrada para o período selecionado.")
+    f_card = f_col2.selectbox("Filtrar por Cartão",
