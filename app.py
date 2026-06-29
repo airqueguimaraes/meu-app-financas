@@ -209,11 +209,9 @@ if st.session_state.editing_index is not None:
 else:
     default_amount_str = ""
 
-# Adiciona um modificador na chave se o formulário acabou de ser limpo para forçar o reset do layout
 state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
 state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
 
-# Reseta o gatilho de limpeza interna
 st.session_state.form_clear_trigger = False
 
 d_col1, d_col2 = st.columns(2)
@@ -271,24 +269,21 @@ if submit_btn:
         if "," in clean_amount_str and "." in clean_amount_str:
             clean_amount_str = clean_amount_str.replace(".", "")
         clean_amount_str = clean_amount_str.replace(",", ".")
-        processed_amount = float(clean_amount_str)
+        processed_amount = round(float(clean_amount_str), 2)
     except ValueError:
         st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
         st.stop()
         
-    processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
+    processed_inst_val = round(processed_amount / installments, 2) if tx_method == "credito_parcelado" else processed_amount
     
-    # NOVA ABORDAGEM MATEMÁTICA BR: Convertemos o valor decimal diretamente em STRING FORMATADA
-    sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
-    sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
-    
+    # MUDANÇA ABSOLUTA: Mandamos a variável como float pura matemática (sem aspas textuais e sem substituições manuais)
     updated_row = [
         tx_type,
         tx_desc,
-        sheet_amount, 
+        processed_amount, # Float numérico puro
         tx_method,
         installments,
-        sheet_inst_val, 
+        processed_inst_val, # Float numérico puro
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
@@ -298,17 +293,18 @@ if submit_btn:
     
     try:
         if st.session_state.editing_index is not None:
+            # O segredo final: Mudamos para o formato RAW (Bruto). Ele obriga o Google Sheets a ler o float puro 
+            # sem tentar aplicar conversões textuais inteligentes regionais que quebram a vírgula.
             worksheet.update(
                 range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                 values=[updated_row],
-                value_input_option="USER_ENTERED"
+                value_input_option="RAW"
             )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
+            worksheet.append_row(updated_row, value_input_option="RAW")
             
-        # CORREÇÃO DO SEGUNDO PROBLEMA: Ativamos o gatilho de autolimpeza para apagar todos os campos após a conclusão
         st.session_state.form_clear_trigger = True
         st.session_state.edit_values = {}
         st.cache_data.clear()
