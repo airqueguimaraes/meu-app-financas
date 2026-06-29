@@ -66,21 +66,9 @@ section.main > div.block-container {
 
 /* 3.1 Ajusta o respiro superior da sidebar */
 [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-    padding-top: 0.85rem !important;
+    padding-top: 0.55rem !important;
 }
 
-/* 3.2 Título principal do menu lateral */
-.sidebar-menu-main-title {
-    color: #328655 !important;
-    font-family: inherit !important;
-    font-size: 2.45rem !important;
-    font-weight: 500 !important;
-    line-height: 1 !important;
-    text-align: center !important;
-    margin: 0 0 1.45rem 0 !important;
-    padding: 0 !important;
-    letter-spacing: -0.02em !important;
-}
 
 /* 4. Botão de Abrir/Fechar Sidebar
    Versão limpa, sem pseudo-elementos, para evitar ícone duplicado.
@@ -597,7 +585,6 @@ def render_credit_cards_sidebar():
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 # --- PROCESSAMENTO DOS SALDOS ---
-st.sidebar.markdown('<div class="sidebar-menu-main-title">Menu</div>', unsafe_allow_html=True)
 st.sidebar.markdown('<h3 class="sidebar-section-title">Calendário</h3>', unsafe_allow_html=True)
 current_date = datetime.now()
 selected_month = st.sidebar.selectbox(
