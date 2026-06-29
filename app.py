@@ -815,6 +815,40 @@ def clean_text(val):
 def is_true_value(val):
     return val is True or clean_text(val).lower() == "true"
 
+def is_cash_change_adjustment(record):
+    """Identifica troco/ajuste de dinheiro vivo que não representa nova entrada de renda.
+
+    Exemplo: sacar R$ 100, usar uma nota de R$ 50, gastar R$ 20 e receber R$ 30 de troco.
+    Esse R$ 30 já faz parte do dinheiro sacado, então não deve somar em Entradas do mês
+    nem aumentar novamente o saldo de Dinheiro Vivo.
+    """
+    payment_method = clean_text(record.get("payment_method", "")).lower()
+    tx_type = clean_text(record.get("type", "")).lower()
+    description = clean_text(record.get("description", "")).lower()
+    notes = clean_text(record.get("notes", "")).lower()
+    combined_text = f"{description} {notes}"
+
+    return (
+        tx_type == "entrada"
+        and (
+            payment_method == "troco_dinheiro"
+            or (payment_method == "dinheiro_vivo" and "troco" in combined_text)
+        )
+    )
+
+def format_payment_method_label(payment_method):
+    labels = {
+        "pix_conta": "Pix Conta",
+        "dinheiro_vivo": "Dinheiro Vivo",
+        "troco_dinheiro": "Troco / Ajuste",
+        "pix": "Pix",
+        "saque_dinheiro": "Saque Dinheiro",
+        "pagamento_fatura": "Pagamento de Fatura",
+        "credito_parcelado": "Crédito Parcelado",
+    }
+    cleaned = clean_text(payment_method)
+    return labels.get(cleaned, cleaned.replace("_", " ").title())
+
 def safe_float(val):
     if val is None or pd.isna(val):
         return 0.0
@@ -1098,11 +1132,16 @@ for r in records:
     amount = r["amount"]
     inst_val = r["installment_value"]
     
+    is_change_adjustment = is_cash_change_adjustment(r)
+
     if r["type"] == "entrada":
         if r["payment_method"] == "pix_conta":
             bank_balance += amount
-        elif r["payment_method"] == "dinheiro_vivo":
+        elif r["payment_method"] == "dinheiro_vivo" and not is_change_adjustment:
             cash_balance += amount
+        elif r["payment_method"] == "troco_dinheiro":
+            # Troco/ajuste não é dinheiro novo: ele já fazia parte do valor sacado.
+            pass
     else:
         if r["payment_method"] == "saque_dinheiro":
             bank_balance -= amount
@@ -1121,7 +1160,8 @@ for r in records:
             r["order_amount"] = amount
             filtered_records.append(r)
             if r["type"] == "entrada":
-                total_income_month += amount
+                if not is_change_adjustment:
+                    total_income_month += amount
             elif r["payment_method"] != "saque_dinheiro":
                 total_expense_month += amount
     else:
@@ -1199,7 +1239,11 @@ with main_col:
         tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
 
         if tx_type == "entrada":
-            method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
+            method_opts = {
+                "pix_conta": "Pix na conta",
+                "dinheiro_vivo": "Dinheiro vivo",
+                "troco_dinheiro": "Troco / ajuste de dinheiro vivo"
+            }
         else:
             method_opts = {
                 "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
@@ -1318,7 +1362,10 @@ with main_col:
                     worksheet.append_row(updated_row, value_input_option="RAW")
                     
                 if is_new_transaction:
-                    st.session_state.screen_animation_emoji = "🤑" if tx_type == "entrada" else "😔"
+                    if tx_type == "entrada" and tx_method != "troco_dinheiro":
+                        st.session_state.screen_animation_emoji = "🤑"
+                    elif tx_type == "saida":
+                        st.session_state.screen_animation_emoji = "😔"
 
                 st.session_state.form_clear_trigger = True
                 st.session_state.edit_values = {}
@@ -1414,11 +1461,20 @@ with history_col:
                 if not desc:
                     desc = clean_notes[:60] if clean_notes else "Sem descrição"
                 
-                prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-                color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
+                row_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+                is_change_adjustment_row = is_cash_change_adjustment(row_dict)
+
+                if is_change_adjustment_row:
+                    prefix = ""
+                    color = "#8a8f98"
+                else:
+                    prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
+                    color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
                 
                 dt_obj = pd.to_datetime(row['created_at'])
-                meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
+                meta = f"{format_payment_method_label(row['payment_method'])} | {format_br_date(dt_obj)}"
+                if is_change_adjustment_row:
+                    meta += " | Não soma como entrada"
                 clean_card = clean_text(row.get("card", ""))
                 clean_bought_by = clean_text(row.get("bought_by", ""))
                 if clean_card:
