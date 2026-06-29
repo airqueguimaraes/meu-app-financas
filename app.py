@@ -371,6 +371,135 @@ section.main > div.block-container {
     padding: 0.75rem 0 0 0 !important;
 }
 
+
+/* 4.3 Menu de navegação da sidebar */
+.sidebar-nav-title {
+    color: #ffffff !important;
+    font-family: inherit !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    margin: 0.15rem 0 0.7rem 0 !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.35rem !important;
+    margin-bottom: 1.35rem !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    border-radius: 10px !important;
+    padding: 0.58rem 0.7rem !important;
+    transition: all 0.18s ease !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    background: rgba(255, 255, 255, 0.10) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label p {
+    color: rgba(255, 255, 255, 0.90) !important;
+    font-weight: 700 !important;
+    font-size: 0.88rem !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
+    background: rgba(56, 130, 83, 0.22) !important;
+    border-color: rgba(56, 130, 83, 0.72) !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
+    color: #ffffff !important;
+}
+
+/* 4.4 Página Contas e Assinaturas */
+.page-kicker {
+    color: #6b7280 !important;
+    font-size: 0.92rem !important;
+    margin: 0.15rem 0 1.2rem 0 !important;
+}
+
+.bills-summary-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+    margin: 1.05rem 0 1.45rem 0 !important;
+}
+
+.bills-summary-card {
+    border-radius: 18px !important;
+    padding: 1.05rem 1.1rem !important;
+    border: 1px solid rgba(38, 43, 53, 0.08) !important;
+    background: #f8fafc !important;
+    box-shadow: 0 14px 30px rgba(17, 24, 39, 0.05) !important;
+}
+
+.bills-summary-label {
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    color: #4b5563 !important;
+    margin-bottom: 0.4rem !important;
+}
+
+.bills-summary-value {
+    font-size: clamp(1.25rem, 1.8vw, 1.9rem) !important;
+    font-weight: 800 !important;
+    color: #2f3140 !important;
+    white-space: nowrap !important;
+}
+
+.bill-card {
+    border: 1px solid rgba(38, 43, 53, 0.12) !important;
+    border-radius: 16px !important;
+    padding: 1rem !important;
+    margin-bottom: 0.75rem !important;
+    background: #ffffff !important;
+}
+
+.bill-card-title {
+    color: #2f3140 !important;
+    font-size: 1rem !important;
+    font-weight: 800 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.bill-card-meta {
+    color: #6b7280 !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.65rem !important;
+}
+
+.bill-card-value {
+    color: #328655 !important;
+    font-size: 1.15rem !important;
+    font-weight: 900 !important;
+}
+
+.bill-status-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    border-radius: 999px !important;
+    padding: 0.2rem 0.55rem !important;
+    background: rgba(56, 130, 83, 0.10) !important;
+    color: #328655 !important;
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    margin-left: 0.35rem !important;
+}
+
+@media (max-width: 900px) {
+    .bills-summary-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
 div[data-baseweb="select"] > div {
     border-color: #b4b4b4 !important;
@@ -1267,11 +1396,210 @@ def build_top_expenses_chart_html(filtered_records):
         '</div>'
     )
 
+
+BILLS_SHEET_NAME = "contas_assinaturas"
+BILLS_HEADERS = ["name", "category", "amount", "due_day", "payment_method", "notes", "active", "created_at"]
+
+def get_or_create_fixed_bills_worksheet():
+    try:
+        bills_ws = google_sheets_retry(sh.worksheet, BILLS_SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        bills_ws = google_sheets_retry(sh.add_worksheet, title=BILLS_SHEET_NAME, rows=200, cols=len(BILLS_HEADERS))
+        google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
+        return bills_ws
+
+    try:
+        values = google_sheets_retry(bills_ws.get_all_values)
+        if not values:
+            google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
+        else:
+            current_headers = [clean_text(h) for h in values[0]]
+            missing_headers = [h for h in BILLS_HEADERS if h not in current_headers]
+            if missing_headers:
+                # Mantém compatibilidade caso a aba tenha sido criada manualmente com colunas incompletas.
+                google_sheets_retry(bills_ws.update, range_name="A1:H1", values=[BILLS_HEADERS], value_input_option="RAW")
+    except Exception:
+        pass
+    return bills_ws
+
+@st.cache_data(ttl=5)
+def load_fixed_bills():
+    try:
+        bills_ws = get_or_create_fixed_bills_worksheet()
+        raw_rows = google_sheets_retry(bills_ws.get_all_values)
+        if len(raw_rows) <= 1:
+            return []
+
+        headers = [clean_text(h) for h in raw_rows[0]]
+        records_list = []
+        field_map = {header: headers.index(header) if header in headers else idx for idx, header in enumerate(BILLS_HEADERS)}
+
+        for idx, row in enumerate(raw_rows[1:], start=2):
+            while len(row) < len(BILLS_HEADERS):
+                row.append("")
+
+            record = {
+                "sheet_row_idx": idx,
+                "name": clean_text(row[field_map.get("name", 0)]),
+                "category": clean_text(row[field_map.get("category", 1)]),
+                "amount": safe_float(row[field_map.get("amount", 2)]),
+                "due_day": int(safe_float(row[field_map.get("due_day", 3)])) if clean_text(row[field_map.get("due_day", 3)]) else 1,
+                "payment_method": clean_text(row[field_map.get("payment_method", 4)]),
+                "notes": clean_text(row[field_map.get("notes", 5)]),
+                "active": clean_text(row[field_map.get("active", 6)]).upper() != "FALSE",
+                "created_at": clean_text(row[field_map.get("created_at", 7)]),
+            }
+
+            if record["name"]:
+                records_list.append(record)
+
+        return records_list
+    except Exception as e:
+        st.error(f"Erro ao carregar contas e assinaturas: {e}")
+        return []
+
+def render_bills_page(selected_month, selected_year):
+    st.markdown("# Contas e assinaturas")
+    st.markdown(
+        '<div class="page-kicker">Cadastre pagamentos mensais fixos, como aluguel, carro, empréstimos, luz, água, internet, celular e assinaturas.</div>',
+        unsafe_allow_html=True
+    )
+
+    bills = load_fixed_bills()
+    active_bills = [bill for bill in bills if bill.get("active", True)]
+    total_monthly = sum(safe_float(bill.get("amount", 0)) for bill in active_bills)
+    total_count = len(active_bills)
+
+    today = datetime.now()
+    upcoming_bills = []
+    for bill in active_bills:
+        due_day = max(1, min(31, int(bill.get("due_day", 1) or 1)))
+        if selected_month == today.month and selected_year == today.year:
+            days_until_due = due_day - today.day
+            if 0 <= days_until_due <= 7:
+                upcoming_bills.append(bill)
+        else:
+            upcoming_bills.append(bill)
+
+    next_due_text = "Sem vencimentos próximos"
+    if upcoming_bills:
+        next_bill = sorted(upcoming_bills, key=lambda b: int(b.get("due_day", 1) or 1))[0]
+        next_due_text = f'{next_bill.get("name", "Conta")} — dia {int(next_bill.get("due_day", 1)):02d}'
+
+    summary_html = (
+        '<div class="bills-summary-grid">'
+        '<div class="bills-summary-card"><div class="bills-summary-label">Total mensal fixo</div><div class="bills-summary-value">' + html.escape(format_currency(total_monthly)) + '</div></div>'
+        '<div class="bills-summary-card"><div class="bills-summary-label">Contas ativas</div><div class="bills-summary-value">' + str(total_count) + '</div></div>'
+        '<div class="bills-summary-card"><div class="bills-summary-label">Próximo vencimento</div><div class="bills-summary-value" style="font-size: clamp(1rem, 1.35vw, 1.35rem);">' + html.escape(next_due_text) + '</div></div>'
+        '</div>'
+    )
+    st.markdown(summary_html, unsafe_allow_html=True)
+
+    form_col, list_col = st.columns([0.46, 0.54], gap="large")
+
+    with form_col:
+        st.subheader("Nova conta fixa")
+        bill_name = st.text_input("Nome", placeholder="Ex: Aluguel, Internet, Parcela do carro")
+        bill_category = st.selectbox(
+            "Categoria",
+            ["Moradia", "Transporte", "Empréstimos", "Luz", "Água", "Internet", "Celular", "Assinatura", "Outros"]
+        )
+        amount_col, due_col = st.columns(2)
+        bill_amount_str = amount_col.text_input("Valor mensal (R$)", placeholder="Ex: 120,00")
+        bill_due_day = due_col.number_input("Dia de vencimento", min_value=1, max_value=31, value=10, step=1)
+        bill_payment_method = st.selectbox(
+            "Forma de pagamento",
+            ["Pix", "Débito", "Boleto", "Cartão de crédito", "Transferência", "Dinheiro", "Outro"]
+        )
+        bill_notes = st.text_area("Observações", placeholder="Ex: vence todo mês, contrato, detalhes do plano...")
+
+        if st.button("Adicionar conta fixa", type="primary"):
+            if not bill_name.strip():
+                st.error("Preencha o nome da conta ou assinatura.")
+                st.stop()
+            if not bill_amount_str.strip():
+                st.error("Preencha o valor mensal.")
+                st.stop()
+
+            try:
+                clean_amount_str = bill_amount_str.strip().replace(" ", "")
+                if "," in clean_amount_str and "." in clean_amount_str:
+                    clean_amount_str = clean_amount_str.replace(".", "")
+                clean_amount_str = clean_amount_str.replace(",", ".")
+                bill_amount = float(clean_amount_str)
+            except ValueError:
+                st.error("Valor inválido! Digite apenas números, por exemplo: 120,00.")
+                st.stop()
+
+            try:
+                bills_ws = get_or_create_fixed_bills_worksheet()
+                new_bill_row = [
+                    bill_name.strip(),
+                    bill_category,
+                    round(bill_amount, 2),
+                    int(bill_due_day),
+                    bill_payment_method,
+                    bill_notes,
+                    "TRUE",
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                ]
+                google_sheets_retry(bills_ws.append_row, new_bill_row, value_input_option="RAW")
+                st.cache_data.clear()
+                st.success("Conta fixa adicionada.")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Erro ao salvar conta fixa: {err}")
+
+    with list_col:
+        st.subheader("Contas cadastradas")
+        if not active_bills:
+            st.info("Nenhuma conta ou assinatura cadastrada ainda.")
+        else:
+            sorted_bills = sorted(active_bills, key=lambda b: (int(b.get("due_day", 1) or 1), b.get("name", "")))
+            for bill in sorted_bills:
+                due_day = int(bill.get("due_day", 1) or 1)
+                name = html.escape(bill.get("name", "Conta"))
+                category = html.escape(bill.get("category", "Outros"))
+                method = html.escape(bill.get("payment_method", ""))
+                notes = html.escape(bill.get("notes", ""))
+                amount = html.escape(format_currency(safe_float(bill.get("amount", 0))))
+
+                st.markdown(
+                    '<div class="bill-card">'
+                    f'<div class="bill-card-title">{name}<span class="bill-status-pill">Ativa</span></div>'
+                    f'<div class="bill-card-meta">{category} | Vence dia {due_day:02d} | {method}</div>'
+                    f'<div class="bill-card-value">{amount}</div>'
+                    + (f'<div class="bill-card-meta" style="margin-top:0.55rem;">{notes}</div>' if notes else '')
+                    + '</div>',
+                    unsafe_allow_html=True
+                )
+
+                if st.button("🗑️ Remover", key=f"remove_bill_{bill['sheet_row_idx']}"):
+                    try:
+                        bills_ws = get_or_create_fixed_bills_worksheet()
+                        google_sheets_retry(bills_ws.delete_rows, bill["sheet_row_idx"])
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as err:
+                        st.error(f"Erro ao remover conta fixa: {err}")
+
+
 records = load_data()
 render_transaction_animation()
 
 # --- PROCESSAMENTO DOS SALDOS ---
 current_date = datetime.now()
+
+st.sidebar.markdown('<div class="sidebar-nav-title">Navegação</div>', unsafe_allow_html=True)
+nav_options = ["🏠 Home", "📌 Contas e assinaturas"]
+selected_nav = st.sidebar.radio(
+    "Navegação",
+    nav_options,
+    index=0,
+    key="sidebar_navigation",
+    label_visibility="collapsed"
+)
+page_key = "home" if selected_nav == nav_options[0] else "contas_assinaturas"
 
 with st.sidebar.expander("Calendário", expanded=True):
     selected_month = st.selectbox(
@@ -1346,333 +1674,337 @@ for r in records:
                 total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
-# Layout principal: área de resumo + nova transação à esquerda,
-# histórico do mês à direita.
-main_col, history_col = st.columns([0.68, 0.32], gap="large")
+if page_key == "home":
+    # Layout principal: área de resumo + nova transação à esquerda,
+    # histórico do mês à direita.
+    main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
-with main_col:
-    logo_col, chart_col = st.columns([0.34, 0.66], gap="large", vertical_alignment="center")
-    with logo_col:
-        if os.path.exists("logo.png"):
-            st.image("logo.png", width=240)
-        else:
-            st.title("Meu App Finanças")
-    with chart_col:
-        st.markdown(build_top_expenses_chart_html(filtered_records), unsafe_allow_html=True)
+    with main_col:
+        logo_col, chart_col = st.columns([0.34, 0.66], gap="large", vertical_alignment="center")
+        with logo_col:
+            if os.path.exists("logo.png"):
+                st.image("logo.png", width=240)
+            else:
+                st.title("Meu App Finanças")
+        with chart_col:
+            st.markdown(build_top_expenses_chart_html(filtered_records), unsafe_allow_html=True)
 
-    st.markdown("<div style='margin-bottom: 1.35rem;'></div>", unsafe_allow_html=True)
-    def summary_card_html(label, value, card_class):
-        # HTML sem indentação inicial: evita que o Markdown do Streamlit trate como bloco de código.
-        return (
-            f'<div class="summary-card {card_class}">'
-            f'<div class="summary-card-label">{label}</div>'
-            f'<div class="summary-card-value">{value}</div>'
-            f'</div>'
-        )
-
-    summary_cards_html = (
-        '<div class="summary-cards-grid">'
-        + "".join([
-            summary_card_html("Saldo em Banco", format_currency(bank_balance), "summary-card-bank"),
-            summary_card_html("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash"),
-            summary_card_html("Entradas (Mês)", format_currency(total_income_month), "summary-card-income"),
-            summary_card_html("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense"),
-        ])
-        + '</div>'
-    )
-
-    st.markdown(summary_cards_html, unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    if st.session_state.editing_index is not None:
-        st.warning(f"✏️ Você está EDITANDO a transação: **{st.session_state.edit_values.get('description')}**")
-        if st.button("Cancelar Edição"):
-            st.session_state.editing_index = None
-            st.session_state.edit_values = {}
-            st.rerun()
-
-    # Mantém o formulário compacto e centralizado dentro da coluna principal.
-    form_left_pad, form_area, form_right_pad = st.columns([0.02, 0.96, 0.02])
-
-    with form_area:
-        st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
-
-        t_col1, t_col2 = st.columns(2)
-        default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
-        tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
-
-        if tx_type == "entrada":
-            method_opts = {
-                "pix_conta": "Pix na conta",
-                "dinheiro_vivo": "Dinheiro vivo",
-                "troco_dinheiro": "Troco / ajuste de dinheiro vivo"
-            }
-        else:
-            method_opts = {
-                "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
-                "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
-                "credito_parcelado": "Crédito Parcelado"
-            }
-
-        method_keys = list(method_opts.keys())
-        default_method_str = st.session_state.edit_values.get("payment_method", method_keys[0])
-        default_method_idx = method_keys.index(default_method_str) if default_method_str in method_keys else 0
-
-        tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
-
-        if st.session_state.editing_index is not None:
-            try:
-                raw_amount = st.session_state.edit_values.get("amount", 0.01)
-                default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
-            except Exception:
-                default_amount_str = "0,01"
-        else:
-            default_amount_str = ""
-
-        state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
-        state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
-
-        st.session_state.form_clear_trigger = False
-
-        d_col1, d_col2 = st.columns(2)
-        tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
-        tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
-
-        installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
-        card_brand = st.session_state.edit_values.get("card", "")
-        is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
-        bought_by = st.session_state.edit_values.get("bought_by", "")
-
-        if st.session_state.editing_index is not None:
-            tx_date = pd.to_datetime(st.session_state.edit_values.get("created_at", datetime.now()))
-        else:
-            tx_date = datetime.now()
-
-        if tx_method == "credito_parcelado" and tx_type == "saida":
-            st.markdown("##### 💳 Detalhes do Parcelamento")
-            c_col1, c_col2 = st.columns(2)
-            installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments), key=f"inst_{state_key}")
-            
-            card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon Prime", "Mei Fácil", "Amazon", "Mei PJ"]
-            default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
-            card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx, key=f"card_{state_key}")
-            
-            is_for_someone = st.checkbox("Compra de alguém", value=is_for_someone, key=f"someone_{state_key}")
-            if is_for_someone:
-                bought_by = st.text_input("Quem comprou?", value=bought_by, placeholder="Ex: Nome da pessoa", key=f"buyer_{state_key}")
-
-        use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None, key=f"cust_date_{state_key}")
-        if use_custom_date:
-            custom_d = st.date_input("Data da transação", tx_date.date(), format="DD/MM/YYYY", key=f"date_pick_{state_key}")
-            st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
-            tx_date = datetime.combine(custom_d, tx_date.time())
-
-        tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...", key=f"notes_{state_key}")
-
-        button_label = "Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação"
-        submit_btn = st.button(button_label, type="primary")
-
-        if submit_btn:
-            if not tx_desc:
-                if tx_method == "saque_dinheiro":
-                    tx_desc = "Saque dinheiro"
-                else:
-                    st.error("Por favor, preencha a descrição.")
-                    st.stop()
-                    
-            if not tx_amount_str:
-                st.error("Por favor, insira o valor da transação.")
-                st.stop()
-                
-            try:
-                clean_amount_str = tx_amount_str.strip().replace(" ", "")
-                if "," in clean_amount_str and "." in clean_amount_str:
-                    clean_amount_str = clean_amount_str.replace(".", "")
-                clean_amount_str = clean_amount_str.replace(",", ".")
-                processed_amount = float(clean_amount_str)
-            except ValueError:
-                st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
-                st.stop()
-                
-            processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
-            
-            updated_row = [
-                tx_type,
-                tx_desc,
-                round(processed_amount, 2),       
-                tx_method,
-                int(installments),                
-                round(processed_inst_val, 2),     
-                card_brand,
-                "TRUE" if is_for_someone else "FALSE",
-                bought_by,
-                tx_date.strftime("%Y-%m-%d %H:%M:%S"),
-                tx_notes
-            ]
-            
-            is_new_transaction = st.session_state.editing_index is None
-
-            try:
-                if st.session_state.editing_index is not None:
-                    google_sheets_retry(
-                        worksheet.update,
-                        range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}",
-                        values=[updated_row],
-                        value_input_option="RAW"
-                    )
-                    st.session_state.editing_index = None
-                    st.session_state.edit_values = {}
-                else:
-                    google_sheets_retry(worksheet.append_row, updated_row, value_input_option="RAW")
-                    
-                if is_new_transaction:
-                    if tx_type == "entrada" and tx_method != "troco_dinheiro":
-                        st.session_state.screen_animation_emoji = "🤑"
-                    elif tx_type == "saida":
-                        st.session_state.screen_animation_emoji = "😔"
-
-                st.session_state.form_clear_trigger = True
-                st.session_state.edit_values = {}
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as err:
-                st.error(f"Erro ao salvar na planilha: {err}")
-
-with history_col:
-    st.subheader("Histórico")
-    history_search = st.text_input(
-        "Pesquisar",
-        placeholder="Buscar por nome ou valor...",
-        key=f"history_search_{selected_month}_{selected_year}",
-        help="Pesquise pelo nome da transação ou pelo valor exibido no mês selecionado."
-    )
-
-    if filtered_records:
-        df_hist = pd.DataFrame(filtered_records)
-
-        with st.expander("Filtros e ordenação", expanded=False):
-            f_type = st.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"], key="hist_filter_type")
-            f_card = st.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""], key="hist_filter_card")
-            f_buyer = st.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""], key="hist_filter_buyer")
-            sort_option = st.selectbox(
-                "Ordenar por",
-                options=[
-                    "Data: mais recente no topo",
-                    "Data: mais antigo no topo",
-                    "Valor: do maior para o menor",
-                    "Valor: do menor para o maior"
-                ],
-                index=0,
-                key="hist_sort_option"
+        st.markdown("<div style='margin-bottom: 1.35rem;'></div>", unsafe_allow_html=True)
+        def summary_card_html(label, value, card_class):
+            # HTML sem indentação inicial: evita que o Markdown do Streamlit trate como bloco de código.
+            return (
+                f'<div class="summary-card {card_class}">'
+                f'<div class="summary-card-label">{label}</div>'
+                f'<div class="summary-card-value">{value}</div>'
+                f'</div>'
             )
 
-        if history_search.strip():
-            q = history_search.strip().lower()
-            q_digits = "".join(ch for ch in q if ch.isdigit())
+        summary_cards_html = (
+            '<div class="summary-cards-grid">'
+            + "".join([
+                summary_card_html("Saldo em Banco", format_currency(bank_balance), "summary-card-bank"),
+                summary_card_html("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash"),
+                summary_card_html("Entradas (Mês)", format_currency(total_income_month), "summary-card-income"),
+                summary_card_html("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense"),
+            ])
+            + '</div>'
+        )
 
-            def row_matches_search(row):
-                is_inst = is_true_value(row.get("is_installment_view", False))
-                desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
-                val = row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0)
-                val_float = safe_float(val)
-                search_parts = [
-                    desc,
-                    str(row.get("notes", "")),
-                    str(row.get("payment_method", "")),
-                    str(row.get("card", "")),
-                    str(row.get("bought_by", "")),
-                    format_currency(val_float),
-                    f"{val_float:.2f}",
-                    f"{val_float:.2f}".replace(".", ","),
-                    str(val),
-                ]
-                joined = " ".join(search_parts).lower()
-                joined_digits = "".join(ch for ch in joined if ch.isdigit())
-                return bool(q in joined or (q_digits != "" and q_digits in joined_digits))
+        st.markdown(summary_cards_html, unsafe_allow_html=True)
 
-            search_mask = df_hist.apply(row_matches_search, axis=1)
-            if not search_mask.empty:
-                search_mask = search_mask.astype(bool)
-                df_hist = df_hist.loc[search_mask]
+        st.markdown("---")
+
+        if st.session_state.editing_index is not None:
+            st.warning(f"✏️ Você está EDITANDO a transação: **{st.session_state.edit_values.get('description')}**")
+            if st.button("Cancelar Edição"):
+                st.session_state.editing_index = None
+                st.session_state.edit_values = {}
+                st.rerun()
+
+        # Mantém o formulário compacto e centralizado dentro da coluna principal.
+        form_left_pad, form_area, form_right_pad = st.columns([0.02, 0.96, 0.02])
+
+        with form_area:
+            st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
+
+            t_col1, t_col2 = st.columns(2)
+            default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
+            tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
+
+            if tx_type == "entrada":
+                method_opts = {
+                    "pix_conta": "Pix na conta",
+                    "dinheiro_vivo": "Dinheiro vivo",
+                    "troco_dinheiro": "Troco / ajuste de dinheiro vivo"
+                }
             else:
-                df_hist = df_hist.iloc[0:0]
+                method_opts = {
+                    "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
+                    "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
+                    "credito_parcelado": "Crédito Parcelado"
+                }
 
-        if f_type != "Todos":
-            df_hist = df_hist[df_hist["type"] == f_type]
-        if f_card != "Todos":
-            df_hist = df_hist[df_hist["card"] == f_card]
-        if f_buyer != "Todos":
-            df_hist = df_hist[df_hist["bought_by"] == f_buyer]
+            method_keys = list(method_opts.keys())
+            default_method_str = st.session_state.edit_values.get("payment_method", method_keys[0])
+            default_method_idx = method_keys.index(default_method_str) if default_method_str in method_keys else 0
+
+            tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
+
+            if st.session_state.editing_index is not None:
+                try:
+                    raw_amount = st.session_state.edit_values.get("amount", 0.01)
+                    default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
+                except Exception:
+                    default_amount_str = "0,01"
+            else:
+                default_amount_str = ""
+
+            state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
+            state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
+
+            st.session_state.form_clear_trigger = False
+
+            d_col1, d_col2 = st.columns(2)
+            tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
+            tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
+
+            installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
+            card_brand = st.session_state.edit_values.get("card", "")
+            is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
+            bought_by = st.session_state.edit_values.get("bought_by", "")
+
+            if st.session_state.editing_index is not None:
+                tx_date = pd.to_datetime(st.session_state.edit_values.get("created_at", datetime.now()))
+            else:
+                tx_date = datetime.now()
+
+            if tx_method == "credito_parcelado" and tx_type == "saida":
+                st.markdown("##### 💳 Detalhes do Parcelamento")
+                c_col1, c_col2 = st.columns(2)
+                installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments), key=f"inst_{state_key}")
             
-        if sort_option == "Data: mais recente no topo":
-            df_hist = df_hist.sort_values(by="created_at", ascending=False)
-        elif sort_option == "Data: mais antigo no topo":
-            df_hist = df_hist.sort_values(by="created_at", ascending=True)
-        elif sort_option == "Valor: do maior para o menor":
-            df_hist = df_hist.sort_values(by="order_amount", ascending=False)
-        elif sort_option == "Valor: do menor para o maior":
-            df_hist = df_hist.sort_values(by="order_amount", ascending=True)
+                card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon Prime", "Mei Fácil", "Amazon", "Mei PJ"]
+                default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
+                card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx, key=f"card_{state_key}")
+            
+                is_for_someone = st.checkbox("Compra de alguém", value=is_for_someone, key=f"someone_{state_key}")
+                if is_for_someone:
+                    bought_by = st.text_input("Quem comprou?", value=bought_by, placeholder="Ex: Nome da pessoa", key=f"buyer_{state_key}")
 
-        if df_hist.empty:
-            st.info("Nenhuma transação encontrada para a busca/filtros aplicados.")
-        else:
-            st.caption(f"{len(df_hist)} transação(ões) no mês selecionado")
-            for idx, row in df_hist.iterrows():
-                is_inst = is_true_value(row.get("is_installment_view", False))
-                desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
-                val = safe_float(row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0))
-                clean_notes = clean_text(row.get("notes", ""))
-                if not desc:
-                    desc = clean_notes[:60] if clean_notes else "Sem descrição"
-                
-                row_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
-                is_change_adjustment_row = is_cash_change_adjustment(row_dict)
+            use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None, key=f"cust_date_{state_key}")
+            if use_custom_date:
+                custom_d = st.date_input("Data da transação", tx_date.date(), format="DD/MM/YYYY", key=f"date_pick_{state_key}")
+                st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
+                tx_date = datetime.combine(custom_d, tx_date.time())
 
-                if is_change_adjustment_row:
-                    prefix = ""
-                    color = "#8a8f98"
-                else:
-                    prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-                    color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
-                
-                dt_obj = pd.to_datetime(row['created_at'])
-                meta = f"{format_payment_method_label(row['payment_method'])} | {format_br_date(dt_obj)}"
-                if is_change_adjustment_row:
-                    meta += " | Não soma como entrada"
-                clean_card = clean_text(row.get("card", ""))
-                clean_bought_by = clean_text(row.get("bought_by", ""))
-                if clean_card:
-                    meta += f" | Cartão: {clean_card}"
-                if clean_bought_by:
-                    meta += f" | Compra de: {clean_bought_by}"
+            tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...", key=f"notes_{state_key}")
+
+            button_label = "Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação"
+            submit_btn = st.button(button_label, type="primary")
+
+            if submit_btn:
+                if not tx_desc:
+                    if tx_method == "saque_dinheiro":
+                        tx_desc = "Saque dinheiro"
+                    else:
+                        st.error("Por favor, preencha a descrição.")
+                        st.stop()
                     
-                with st.container(border=True):
-                    st.markdown(f"**{desc}**")
-                    st.caption(meta)
+                if not tx_amount_str:
+                    st.error("Por favor, insira o valor da transação.")
+                    st.stop()
+                
+                try:
+                    clean_amount_str = tx_amount_str.strip().replace(" ", "")
+                    if "," in clean_amount_str and "." in clean_amount_str:
+                        clean_amount_str = clean_amount_str.replace(".", "")
+                    clean_amount_str = clean_amount_str.replace(",", ".")
+                    processed_amount = float(clean_amount_str)
+                except ValueError:
+                    st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
+                    st.stop()
+                
+                processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
+            
+                updated_row = [
+                    tx_type,
+                    tx_desc,
+                    round(processed_amount, 2),       
+                    tx_method,
+                    int(installments),                
+                    round(processed_inst_val, 2),     
+                    card_brand,
+                    "TRUE" if is_for_someone else "FALSE",
+                    bought_by,
+                    tx_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    tx_notes
+                ]
+            
+                is_new_transaction = st.session_state.editing_index is None
 
-                    clean_desc = clean_text(row.get("description", ""))
-                    if clean_notes and clean_notes != clean_desc:
-                        st.markdown(f"*{clean_notes}*")
+                try:
+                    if st.session_state.editing_index is not None:
+                        google_sheets_retry(
+                            worksheet.update,
+                            range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}",
+                            values=[updated_row],
+                            value_input_option="RAW"
+                        )
+                        st.session_state.editing_index = None
+                        st.session_state.edit_values = {}
+                    else:
+                        google_sheets_retry(worksheet.append_row, updated_row, value_input_option="RAW")
+                    
+                    if is_new_transaction:
+                        if tx_type == "entrada" and tx_method != "troco_dinheiro":
+                            st.session_state.screen_animation_emoji = "🤑"
+                        elif tx_type == "saida":
+                            st.session_state.screen_animation_emoji = "😔"
 
-                    st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(val)}</span>", unsafe_allow_html=True)
+                    st.session_state.form_clear_trigger = True
+                    st.session_state.edit_values = {}
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Erro ao salvar na planilha: {err}")
 
-                    row_to_target = row["sheet_row_idx"]
-                    edit_key = f"edit_{row_to_target}_{idx}"
-                    del_key = f"del_{row_to_target}_{idx}"
-                    btn_col1, btn_col2 = st.columns(2)
-                    with btn_col1:
-                        if st.button("✏️ Editar", key=edit_key, help="Editar esta transação", use_container_width=True):
-                            st.session_state.editing_index = row_to_target
-                            st.session_state.edit_values = row.copy()
-                            st.rerun()
-                    with btn_col2:
-                        if st.button("🗑️ Excluir", key=del_key, help="Excluir permanentemente", use_container_width=True):
-                            try:
-                                google_sheets_retry(worksheet.delete_rows, row_to_target)
-                                st.cache_data.clear()
+    with history_col:
+        st.subheader("Histórico")
+        history_search = st.text_input(
+            "Pesquisar",
+            placeholder="Buscar por nome ou valor...",
+            key=f"history_search_{selected_month}_{selected_year}",
+            help="Pesquise pelo nome da transação ou pelo valor exibido no mês selecionado."
+        )
+
+        if filtered_records:
+            df_hist = pd.DataFrame(filtered_records)
+
+            with st.expander("Filtros e ordenação", expanded=False):
+                f_type = st.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"], key="hist_filter_type")
+                f_card = st.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""], key="hist_filter_card")
+                f_buyer = st.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""], key="hist_filter_buyer")
+                sort_option = st.selectbox(
+                    "Ordenar por",
+                    options=[
+                        "Data: mais recente no topo",
+                        "Data: mais antigo no topo",
+                        "Valor: do maior para o menor",
+                        "Valor: do menor para o maior"
+                    ],
+                    index=0,
+                    key="hist_sort_option"
+                )
+
+            if history_search.strip():
+                q = history_search.strip().lower()
+                q_digits = "".join(ch for ch in q if ch.isdigit())
+
+                def row_matches_search(row):
+                    is_inst = is_true_value(row.get("is_installment_view", False))
+                    desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
+                    val = row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0)
+                    val_float = safe_float(val)
+                    search_parts = [
+                        desc,
+                        str(row.get("notes", "")),
+                        str(row.get("payment_method", "")),
+                        str(row.get("card", "")),
+                        str(row.get("bought_by", "")),
+                        format_currency(val_float),
+                        f"{val_float:.2f}",
+                        f"{val_float:.2f}".replace(".", ","),
+                        str(val),
+                    ]
+                    joined = " ".join(search_parts).lower()
+                    joined_digits = "".join(ch for ch in joined if ch.isdigit())
+                    return bool(q in joined or (q_digits != "" and q_digits in joined_digits))
+
+                search_mask = df_hist.apply(row_matches_search, axis=1)
+                if not search_mask.empty:
+                    search_mask = search_mask.astype(bool)
+                    df_hist = df_hist.loc[search_mask]
+                else:
+                    df_hist = df_hist.iloc[0:0]
+
+            if f_type != "Todos":
+                df_hist = df_hist[df_hist["type"] == f_type]
+            if f_card != "Todos":
+                df_hist = df_hist[df_hist["card"] == f_card]
+            if f_buyer != "Todos":
+                df_hist = df_hist[df_hist["bought_by"] == f_buyer]
+            
+            if sort_option == "Data: mais recente no topo":
+                df_hist = df_hist.sort_values(by="created_at", ascending=False)
+            elif sort_option == "Data: mais antigo no topo":
+                df_hist = df_hist.sort_values(by="created_at", ascending=True)
+            elif sort_option == "Valor: do maior para o menor":
+                df_hist = df_hist.sort_values(by="order_amount", ascending=False)
+            elif sort_option == "Valor: do menor para o maior":
+                df_hist = df_hist.sort_values(by="order_amount", ascending=True)
+
+            if df_hist.empty:
+                st.info("Nenhuma transação encontrada para a busca/filtros aplicados.")
+            else:
+                st.caption(f"{len(df_hist)} transação(ões) no mês selecionado")
+                for idx, row in df_hist.iterrows():
+                    is_inst = is_true_value(row.get("is_installment_view", False))
+                    desc = clean_text(row.get("display_description", row.get("description", ""))) if is_inst else clean_text(row.get("description", ""))
+                    val = safe_float(row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0))
+                    clean_notes = clean_text(row.get("notes", ""))
+                    if not desc:
+                        desc = clean_notes[:60] if clean_notes else "Sem descrição"
+                
+                    row_dict = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+                    is_change_adjustment_row = is_cash_change_adjustment(row_dict)
+
+                    if is_change_adjustment_row:
+                        prefix = ""
+                        color = "#8a8f98"
+                    else:
+                        prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
+                        color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
+                
+                    dt_obj = pd.to_datetime(row['created_at'])
+                    meta = f"{format_payment_method_label(row['payment_method'])} | {format_br_date(dt_obj)}"
+                    if is_change_adjustment_row:
+                        meta += " | Não soma como entrada"
+                    clean_card = clean_text(row.get("card", ""))
+                    clean_bought_by = clean_text(row.get("bought_by", ""))
+                    if clean_card:
+                        meta += f" | Cartão: {clean_card}"
+                    if clean_bought_by:
+                        meta += f" | Compra de: {clean_bought_by}"
+                    
+                    with st.container(border=True):
+                        st.markdown(f"**{desc}**")
+                        st.caption(meta)
+
+                        clean_desc = clean_text(row.get("description", ""))
+                        if clean_notes and clean_notes != clean_desc:
+                            st.markdown(f"*{clean_notes}*")
+
+                        st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(val)}</span>", unsafe_allow_html=True)
+
+                        row_to_target = row["sheet_row_idx"]
+                        edit_key = f"edit_{row_to_target}_{idx}"
+                        del_key = f"del_{row_to_target}_{idx}"
+                        btn_col1, btn_col2 = st.columns(2)
+                        with btn_col1:
+                            if st.button("✏️ Editar", key=edit_key, help="Editar esta transação", use_container_width=True):
+                                st.session_state.editing_index = row_to_target
+                                st.session_state.edit_values = row.copy()
                                 st.rerun()
-                            except Exception:
-                                pass
-    else:
-        st.info("Nenhuma transação registrada para o período selecionado.")
+                        with btn_col2:
+                            if st.button("🗑️ Excluir", key=del_key, help="Excluir permanentemente", use_container_width=True):
+                                try:
+                                    google_sheets_retry(worksheet.delete_rows, row_to_target)
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                except Exception:
+                                    pass
+        else:
+            st.info("Nenhuma transação registrada para o período selecionado.")
+
+else:
+    render_bills_page(selected_month, selected_year)
