@@ -138,21 +138,24 @@ col4.metric("Saídas (Mês)", format_currency(total_expense_month))
 st.markdown("---")
 
 st.header("Nova Transação")
+
+# SOLUÇÃO DO BUG: Tiramos a seleção de Tipo/Método de travas estáticas e usamos reatividade controlada
+t_col1, t_col2 = st.columns(2)
+tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"])
+
+if tx_type == "entrada":
+    method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
+else:
+    method_opts = {
+        "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
+        "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
+        "credito_parcelado": "Crédito Parcelado"
+    }
+    
+tx_method = t_col2.selectbox("Método", options=list(method_opts.keys()), format_func=lambda x: method_opts[x])
+
+# O restante dos campos textuais continuam envelopados no formulário para performance de envio
 with st.form("transaction_form", clear_on_submit=True):
-    t_col1, t_col2 = st.columns(2)
-    tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"])
-    
-    if tx_type == "entrada":
-        method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
-    else:
-        method_opts = {
-            "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
-            "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
-            "credito_parcelado": "Crédito Parcelado"
-        }
-        
-    tx_method = t_col2.selectbox("Método", options=list(method_opts.keys()), format_func=lambda x: method_opts[x])
-    
     d_col1, d_col2 = st.columns(2)
     tx_desc = d_col1.text_input("Descrição", placeholder="Ex: Salário")
     tx_amount = d_col2.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")
@@ -162,7 +165,9 @@ with st.form("transaction_form", clear_on_submit=True):
     is_for_someone = False
     bought_by = ""
     
+    # INTELIGÊNCIA UX: Campos de cartão só aparecem se o método for 'Crédito Parcelado'
     if tx_method == "credito_parcelado" and tx_type == "saida":
+        st.markdown("##### 💳 Detalhes do Parcelamento")
         c_col1, c_col2 = st.columns(2)
         installments = c_col1.number_input("Parcelas", min_value=2, max_value=48, value=2)
         card_brand = c_col2.selectbox("Cartão", ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"])
