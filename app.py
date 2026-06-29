@@ -1280,12 +1280,14 @@ components.html(
                 // Desktop: não usamos overlay para evitar seta duplicada.
                 // Mobile: usamos overlay pequeno e centralizado no eixo do texto.
                 icon.style.left = (rect.left + rect.width / 2) + 'px';
-                icon.style.top = labelY + 'px';
+                // Mobile: sobe a seta cerca de 15% do tamanho visual do ícone,
+                // sem alterar o alinhamento do texto "Mostrar menu".
+                icon.style.top = (labelY - (isMobile ? 4 : 0)) + 'px';
                 icon.style.fontSize = isMobile ? '1.55rem' : '1.55rem';
             } else {
                 const isMobileFallback = window.parent.innerWidth <= 768;
                 icon.style.left = '28px';
-                icon.style.top = isMobileFallback ? '33px' : '42px';
+                icon.style.top = isMobileFallback ? '29px' : '42px';
                 label.style.left = '64px';
                 label.style.top = isMobileFallback ? '33px' : '24px';
             }
