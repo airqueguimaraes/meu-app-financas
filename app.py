@@ -184,7 +184,7 @@ section.main > div.block-container {
 #custom-show-menu-label {
     position: fixed !important;
     left: 4.05rem !important;
-    top: 2.85rem !important;
+    top: 2.15rem !important;
     z-index: 9999999 !important;
     color: #6f737b !important;
     font-family: inherit !important;
@@ -422,11 +422,12 @@ components.html(
                 paintCollapsedButton(btn);
 
                 label.style.left = (rect.right + 8) + 'px';
-                label.style.top = (rect.top + rect.height / 2) + 'px';
+                // Sobe o texto para alinhar com o chevron no topo.
+                label.style.top = (rect.top + rect.height / 2 - 22) + 'px';
             } else {
                 // Fallback fixo: exatamente a região superior esquerda onde a seta aparece.
                 label.style.left = '64px';
-                label.style.top = '54px';
+                label.style.top = '34px';
             }
 
             label.style.display = 'block';
