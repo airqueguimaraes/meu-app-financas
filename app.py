@@ -10,6 +10,10 @@ import mimetypes
 import html
 import math
 import time
+import io
+import re
+import unicodedata
+import hashlib
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -752,6 +756,49 @@ div.stButton > button[kind="primary"] {
     }
     .top-expenses-bars {
         height: 72px;
+    }
+}
+
+
+/* 4.5 Página Importar CSV */
+.import-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin: 1rem 0 1.2rem 0;
+}
+.import-summary-card {
+    background: #f7f9f8;
+    border: 1px solid rgba(38, 43, 53, 0.08);
+    border-radius: 14px;
+    padding: 0.85rem 0.95rem;
+    box-shadow: 0 8px 20px rgba(38, 43, 53, 0.04);
+}
+.import-summary-label {
+    font-size: 0.72rem;
+    color: #6f7682;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+.import-summary-value {
+    font-size: clamp(1rem, 1.45vw, 1.35rem);
+    color: #262b35;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.import-note-box {
+    background: #f4fbf7;
+    border: 1px solid rgba(56, 130, 83, 0.16);
+    border-radius: 14px;
+    padding: 0.9rem 1rem;
+    color: #384050;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    margin-bottom: 1rem;
+}
+@media (max-width: 900px) {
+    .import-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -1584,6 +1631,295 @@ def render_bills_page(selected_month, selected_year):
                         st.error(f"Erro ao remover conta fixa: {err}")
 
 
+def strip_accents(text):
+    text = clean_text(text).lower()
+    return "".join(
+        char for char in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(char)
+    )
+
+def parse_import_amount(value):
+    raw = clean_text(value)
+    if not raw:
+        return 0.0
+
+    raw = raw.replace("R$", "").replace("r$", "").replace(" ", "")
+    raw = raw.replace("\u00a0", "")
+    raw = re.sub(r"[^0-9,\.\-\+]", "", raw)
+
+    if raw in ["", "+", "-", ",", "."]:
+        return 0.0
+
+    negative = raw.startswith("-") or raw.endswith("-")
+    raw = raw.replace("+", "").replace("-", "")
+
+    if "," in raw and "." in raw:
+        # padrão BR: 1.234,56
+        raw = raw.replace(".", "").replace(",", ".")
+    elif "," in raw:
+        raw = raw.replace(",", ".")
+
+    try:
+        parsed = float(raw)
+    except Exception:
+        parsed = 0.0
+
+    return -abs(parsed) if negative else parsed
+
+def read_uploaded_csv(uploaded_file):
+    file_bytes = uploaded_file.getvalue()
+    encodings = ["utf-8-sig", "utf-8", "latin1", "cp1252"]
+    separators = [None, ";", ",", "\t", "|"]
+
+    last_error = None
+    for encoding in encodings:
+        for sep in separators:
+            try:
+                buffer = io.BytesIO(file_bytes)
+                if sep is None:
+                    df = pd.read_csv(buffer, encoding=encoding, sep=None, engine="python")
+                else:
+                    df = pd.read_csv(buffer, encoding=encoding, sep=sep)
+
+                df = df.dropna(how="all")
+                df.columns = [clean_text(col) or f"Coluna {idx+1}" for idx, col in enumerate(df.columns)]
+                if len(df.columns) >= 2 and len(df) > 0:
+                    return df
+            except Exception as err:
+                last_error = err
+                continue
+
+    raise ValueError(f"Não foi possível ler o CSV. Último erro: {last_error}")
+
+def guess_column(columns, candidates):
+    normalized = {col: strip_accents(col) for col in columns}
+    for candidate in candidates:
+        normalized_candidate = strip_accents(candidate)
+        for col, col_norm in normalized.items():
+            if normalized_candidate == col_norm or normalized_candidate in col_norm:
+                return col
+    return columns[0] if columns else None
+
+def build_duplicate_key(date_value, description, amount, payment_method, card):
+    try:
+        parsed_date = pd.to_datetime(date_value).strftime("%Y-%m-%d")
+    except Exception:
+        parsed_date = clean_text(date_value)[:10]
+
+    desc = strip_accents(description)
+    method = clean_text(payment_method).lower()
+    card_clean = strip_accents(card)
+    amount_float = abs(safe_float(amount))
+    return f"{parsed_date}|{desc}|{amount_float:.2f}|{method}|{card_clean}"
+
+def build_existing_transaction_keys(records):
+    keys = set()
+    for record in records:
+        keys.add(
+            build_duplicate_key(
+                record.get("created_at", ""),
+                record.get("description", ""),
+                record.get("amount", 0),
+                record.get("payment_method", ""),
+                record.get("card", ""),
+            )
+        )
+    return keys
+
+def render_import_csv_page(selected_month, selected_year, records):
+    st.markdown("# Importar CSV")
+    st.markdown(
+        '<div class="page-kicker">Envie um extrato CSV, revise as linhas detectadas e importe apenas as transações aprovadas para sua planilha.</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="import-note-box">O CSV não é salvo no GitHub, no Drive ou na pasta do app. Ele é lido temporariamente, mostrado para revisão e descartado após a sessão. Apenas as transações confirmadas são gravadas no Google Sheets.</div>',
+        unsafe_allow_html=True
+    )
+
+    setup_col, help_col = st.columns([0.48, 0.52], gap="large")
+
+    with setup_col:
+        uploaded_file = st.file_uploader("Enviar extrato CSV", type=["csv"], help="Baixe o CSV no app ou internet banking e envie aqui para revisar antes de importar.")
+        import_type = st.selectbox(
+            "Tipo de extrato",
+            ["Conta bancária / Pix / Débito", "Cartão de crédito"],
+            help="Extratos bancários alteram saldo; compras de cartão não reduzem Saldo em Banco no ato da compra."
+        )
+        source = st.selectbox(
+            "Origem",
+            ["Nubank", "Nu PJ", "Inter", "Mercado Pago", "PicPay", "Amazon Prime", "Mei Fácil", "Outro"],
+        )
+
+    with help_col:
+        st.subheader("Como funciona")
+        st.markdown(
+            """
+            1. O app lê o arquivo temporariamente.  
+            2. Você escolhe quais colunas representam data, descrição e valor.  
+            3. O app mostra uma prévia com possíveis duplicados.  
+            4. Só as linhas marcadas como **Importar** entram na planilha.
+            """
+        )
+
+    if uploaded_file is None:
+        st.info("Envie um arquivo CSV para começar a importação.")
+        return
+
+    try:
+        df_csv = read_uploaded_csv(uploaded_file)
+    except Exception as err:
+        st.error(f"Erro ao ler o arquivo CSV: {err}")
+        return
+
+    if df_csv.empty:
+        st.warning("O CSV foi lido, mas não possui linhas para importar.")
+        return
+
+    columns = list(df_csv.columns)
+    default_date_col = guess_column(columns, ["data", "date", "dt", "data da transacao", "data transacao", "data de lançamento"])
+    default_desc_col = guess_column(columns, ["descricao", "descrição", "lancamento", "lançamento", "historico", "histórico", "title", "nome"])
+    default_value_col = guess_column(columns, ["valor", "amount", "vlr", "preco", "preço", "total"])
+
+    st.markdown("### Mapeamento de colunas")
+    map_col1, map_col2, map_col3 = st.columns(3)
+    date_col = map_col1.selectbox("Coluna de data", columns, index=columns.index(default_date_col) if default_date_col in columns else 0)
+    desc_col = map_col2.selectbox("Coluna de descrição", columns, index=columns.index(default_desc_col) if default_desc_col in columns else 0)
+    value_col = map_col3.selectbox("Coluna de valor", columns, index=columns.index(default_value_col) if default_value_col in columns else 0)
+
+    default_card = source
+    if source == "Mei Fácil":
+        default_card = "Mei Fácil"
+
+    duplicate_keys = build_existing_transaction_keys(records)
+    preview_rows = []
+
+    for idx, raw_row in df_csv.iterrows():
+        raw_date = raw_row.get(date_col, "")
+        raw_desc = clean_text(raw_row.get(desc_col, ""))
+        raw_amount = parse_import_amount(raw_row.get(value_col, 0))
+
+        if not raw_desc and raw_amount == 0:
+            continue
+
+        parsed_date = pd.to_datetime(raw_date, dayfirst=True, errors="coerce")
+        if pd.isna(parsed_date):
+            parsed_date = datetime(selected_year, selected_month, 1)
+
+        amount_abs = abs(raw_amount)
+        if amount_abs == 0:
+            continue
+
+        if import_type == "Cartão de crédito":
+            tx_type = "saida"
+            payment_method = "credito_parcelado"
+            card = default_card
+        else:
+            card = ""
+            if raw_amount >= 0:
+                tx_type = "entrada"
+                payment_method = "pix_conta"
+            else:
+                tx_type = "saida"
+                payment_method = "pix"
+
+        import_id_base = f"{uploaded_file.name}|{source}|{parsed_date.strftime('%Y-%m-%d')}|{raw_desc}|{amount_abs:.2f}|{idx}"
+        import_id = hashlib.sha1(import_id_base.encode("utf-8")).hexdigest()[:12]
+        duplicate_key = build_duplicate_key(parsed_date, raw_desc, amount_abs, payment_method, card)
+        is_duplicate = duplicate_key in duplicate_keys
+
+        preview_rows.append({
+            "Importar": not is_duplicate,
+            "Status": "Possível duplicado" if is_duplicate else "Novo",
+            "Data": parsed_date.strftime("%d/%m/%Y"),
+            "Descrição": raw_desc or "Sem descrição",
+            "Tipo": tx_type,
+            "Método": format_payment_method_label(payment_method),
+            "Cartão": card,
+            "Valor": amount_abs,
+            "created_at_raw": parsed_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "payment_method_raw": payment_method,
+            "type_raw": tx_type,
+            "card_raw": card,
+            "import_id": import_id,
+        })
+
+    if not preview_rows:
+        st.warning("Não encontrei linhas válidas para importar nesse CSV.")
+        return
+
+    preview_df = pd.DataFrame(preview_rows)
+    new_count = int((preview_df["Status"] == "Novo").sum())
+    duplicate_count = int((preview_df["Status"] == "Possível duplicado").sum())
+    total_income = preview_df.loc[preview_df["type_raw"] == "entrada", "Valor"].sum()
+    total_expense = preview_df.loc[preview_df["type_raw"] == "saida", "Valor"].sum()
+
+    summary_html = (
+        '<div class="import-summary-grid">'
+        f'<div class="import-summary-card"><div class="import-summary-label">Linhas válidas</div><div class="import-summary-value">{len(preview_df)}</div></div>'
+        f'<div class="import-summary-card"><div class="import-summary-label">Novas</div><div class="import-summary-value">{new_count}</div></div>'
+        f'<div class="import-summary-card"><div class="import-summary-label">Duplicadas</div><div class="import-summary-value">{duplicate_count}</div></div>'
+        f'<div class="import-summary-card"><div class="import-summary-label">Saídas detectadas</div><div class="import-summary-value">{html.escape(format_currency(total_expense))}</div></div>'
+        '</div>'
+    )
+    st.markdown(summary_html, unsafe_allow_html=True)
+
+    st.markdown("### Prévia da importação")
+    st.caption("Desmarque as linhas que você não quer importar. Linhas marcadas como possível duplicado já vêm desmarcadas.")
+
+    visible_columns = ["Importar", "Status", "Data", "Descrição", "Tipo", "Método", "Cartão", "Valor"]
+    edited_preview = st.data_editor(
+        preview_df[visible_columns],
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Status", "Data", "Descrição", "Tipo", "Método", "Cartão", "Valor"],
+        column_config={
+            "Importar": st.column_config.CheckboxColumn("Importar"),
+            "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+        },
+        key=f"csv_preview_{uploaded_file.name}_{source}_{import_type}",
+    )
+
+    selected_indexes = edited_preview.index[edited_preview["Importar"] == True].tolist()
+    rows_to_import = preview_df.loc[selected_indexes]
+    rows_to_import = rows_to_import[rows_to_import["Status"] != "Possível duplicado"]
+
+    st.caption(f"{len(rows_to_import)} linha(s) selecionada(s) para importar.")
+
+    if st.button("Importar transações selecionadas", type="primary", disabled=rows_to_import.empty):
+        rows_for_sheet = []
+        for _, row in rows_to_import.iterrows():
+            amount = safe_float(row["Valor"])
+            payment_method = row["payment_method_raw"]
+            tx_type = row["type_raw"]
+            card = clean_text(row["card_raw"])
+            installment_value = amount
+            notes = f"Importado via CSV | Origem: {source} | Arquivo: {uploaded_file.name} | ID: {row['import_id']}"
+
+            rows_for_sheet.append([
+                tx_type,
+                clean_text(row["Descrição"]),
+                round(amount, 2),
+                payment_method,
+                1,
+                round(installment_value, 2),
+                card,
+                "FALSE",
+                "",
+                row["created_at_raw"],
+                notes,
+            ])
+
+        try:
+            if rows_for_sheet:
+                google_sheets_retry(worksheet.append_rows, rows_for_sheet, value_input_option="RAW")
+                st.cache_data.clear()
+                st.success(f"Importação concluída: {len(rows_for_sheet)} transação(ões) adicionada(s).")
+                st.rerun()
+        except Exception as err:
+            st.error(f"Erro ao importar transações: {err}")
+
+
 records = load_data()
 render_transaction_animation()
 
@@ -1591,7 +1927,7 @@ render_transaction_animation()
 current_date = datetime.now()
 
 st.sidebar.markdown('<div class="sidebar-nav-title">Navegação</div>', unsafe_allow_html=True)
-nav_options = ["🏠 Home", "📌 Contas e assinaturas"]
+nav_options = ["🏠 Home", "📌 Contas e assinaturas", "📥 Importar CSV"]
 selected_nav = st.sidebar.radio(
     "Navegação",
     nav_options,
@@ -1599,7 +1935,12 @@ selected_nav = st.sidebar.radio(
     key="sidebar_navigation",
     label_visibility="collapsed"
 )
-page_key = "home" if selected_nav == nav_options[0] else "contas_assinaturas"
+if selected_nav == nav_options[0]:
+    page_key = "home"
+elif selected_nav == nav_options[1]:
+    page_key = "contas_assinaturas"
+else:
+    page_key = "importar_csv"
 
 with st.sidebar.expander("Calendário", expanded=True):
     selected_month = st.selectbox(
@@ -2006,5 +2347,7 @@ if page_key == "home":
         else:
             st.info("Nenhuma transação registrada para o período selecionado.")
 
-else:
+elif page_key == "contas_assinaturas":
     render_bills_page(selected_month, selected_year)
+else:
+    render_import_csv_page(selected_month, selected_year, records)
