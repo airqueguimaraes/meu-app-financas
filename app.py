@@ -21,6 +21,22 @@ st.markdown("""
     background-color: #ffffff !important;
 }
 
+/* 2.0 Remove a faixa superior fixa do Streamlit que pode sobrepor/cortar o logo */
+[data-testid="stHeader"],
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stDecoration"] {
+    display: none !important;
+}
+
+[data-testid="stToolbar"] {
+    background: transparent !important;
+}
+
 /* 2.1 Reduz o espaço em branco no topo da área principal */
 .block-container,
 [data-testid="stMain"] .block-container,
@@ -254,6 +270,51 @@ button[title*="Mostrar" i] svg * {
     stroke: #388253 !important;
     opacity: 1 !important;
     filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
+}
+
+/* 4.0.1 Texto direto no controle recolhido
+   Aplica o texto no próprio container do botão, porque em algumas versões
+   do Streamlit o pseudo-elemento no button interno não é exibido. */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapsedControl"] {
+    position: fixed !important;
+    top: 2.05rem !important;
+    left: 1.45rem !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.5rem !important;
+    width: auto !important;
+    min-width: 11rem !important;
+    max-width: none !important;
+    height: 2rem !important;
+    overflow: visible !important;
+    background: transparent !important;
+    z-index: 999999 !important;
+}
+
+[data-testid="collapsedControl"]::after,
+[data-testid="stSidebarCollapsedControl"]::after {
+    content: "Mostrar menu" !important;
+    display: inline-block !important;
+    position: static !important;
+    transform: none !important;
+    margin-left: 0.1rem !important;
+    color: #6f737b !important;
+    font-family: inherit !important;
+    font-size: 0.9rem !important;
+    font-weight: 400 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+}
+
+[data-testid="collapsedControl"] button,
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="collapsedControl"] [role="button"],
+[data-testid="stSidebarCollapsedControl"] [role="button"] {
+    flex: 0 0 auto !important;
 }
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
