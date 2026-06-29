@@ -30,28 +30,71 @@ st.markdown("""
 }
 
 /* 4. Botão de Abrir/Fechar Sidebar */
-/* Menu fechado: botão de abrir em verde */
-[data-testid="collapsedControl"],
-[data-testid="collapsedControl"] *,
+/* Menu fechado: botão de abrir em verde, sobre fundo branco */
+[data-testid="collapsedControl"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+[data-testid="collapsedControl"] button {
+    background-color: #ffffff !important;
+    color: #388253 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+[data-testid="collapsedControl"] button:hover,
+[data-testid="collapsedControl"] button:focus,
+[data-testid="collapsedControl"] button:active {
+    background-color: #ffffff !important;
+    color: #388253 !important;
+    border: none !important;
+    box-shadow: none !important;
+}
 [data-testid="collapsedControl"] svg,
-[data-testid="collapsedControl"] svg path {
+[data-testid="collapsedControl"] svg path,
+[data-testid="collapsedControl"] button svg,
+[data-testid="collapsedControl"] button svg path {
     color: #388253 !important;
     fill: #388253 !important;
     stroke: #388253 !important;
+    opacity: 1 !important;
 }
-/* Menu aberto: botão de recolher em cinza claro */
-[data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebarCollapseButton"] *,
+
+/* Menu aberto: botão de recolher sempre visível em branco */
+[data-testid="stSidebarCollapseButton"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
+}
+[data-testid="stSidebarCollapseButton"] * {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+[data-testid="stSidebarCollapseButton"] button {
+    opacity: 1 !important;
+    visibility: visible !important;
+    background-color: rgba(255, 255, 255, 0.10) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: none !important;
+}
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:focus,
+[data-testid="stSidebarCollapseButton"] button:active {
+    opacity: 1 !important;
+    visibility: visible !important;
+    background-color: rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.24) !important;
+    box-shadow: none !important;
+}
 [data-testid="stSidebarCollapseButton"] svg,
-[data-testid="stSidebarCollapseButton"] svg path {
-    color: #d1d5db !important;
-    fill: #d1d5db !important;
-    stroke: #d1d5db !important;
-}
-/* Hover mais suave, sem laranja */
-[data-testid="collapsedControl"]:hover,
-[data-testid="stSidebarCollapseButton"]:hover {
-    background-color: rgba(56, 130, 83, 0.10) !important;
+[data-testid="stSidebarCollapseButton"] svg path,
+[data-testid="stSidebarCollapseButton"] button svg,
+[data-testid="stSidebarCollapseButton"] button svg path {
+    color: #ffffff !important;
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+    opacity: 1 !important;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
