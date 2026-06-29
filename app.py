@@ -981,28 +981,26 @@ main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
 with main_col:
     def summary_card_html(label, value, card_class):
-        return f"""
-            <div class="summary-card {card_class}">
-                <div class="summary-card-label">{label}</div>
-                <div class="summary-card-value">{value}</div>
-            </div>
-        """
+        # HTML sem indentação inicial: evita que o Markdown do Streamlit trate como bloco de código.
+        return (
+            f'<div class="summary-card {card_class}">'
+            f'<div class="summary-card-label">{label}</div>'
+            f'<div class="summary-card-value">{value}</div>'
+            f'</div>'
+        )
 
-    summary_cards_html = "".join([
-        summary_card_html("Saldo em Banco", format_currency(bank_balance), "summary-card-bank"),
-        summary_card_html("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash"),
-        summary_card_html("Entradas (Mês)", format_currency(total_income_month), "summary-card-income"),
-        summary_card_html("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense"),
-    ])
-
-    st.markdown(
-        f"""
-        <div class="summary-cards-grid">
-            {summary_cards_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    summary_cards_html = (
+        '<div class="summary-cards-grid">'
+        + "".join([
+            summary_card_html("Saldo em Banco", format_currency(bank_balance), "summary-card-bank"),
+            summary_card_html("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash"),
+            summary_card_html("Entradas (Mês)", format_currency(total_income_month), "summary-card-income"),
+            summary_card_html("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense"),
+        ])
+        + '</div>'
     )
+
+    st.markdown(summary_cards_html, unsafe_allow_html=True)
 
     st.markdown("---")
 
