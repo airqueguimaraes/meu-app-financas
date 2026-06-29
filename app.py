@@ -48,6 +48,19 @@ if "editing_index" not in st.session_state:
 if "edit_values" not in st.session_state:
     st.session_state.edit_values = {}
 
+# Conversor inteligente para ler dados vindos do Sheets (trata pontos, vírgulas e textos vazios)
+def clean_float(val):
+    if val == "" or pd.isna(val):
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    # Se vier como texto da planilha (ex: "76,36" ou "7.636,00"), padroniza para o formato Python
+    val_str = str(val).strip().replace(".", "").replace(",", ".")
+    try:
+        return float(val_str)
+    except ValueError:
+        return 0.0
+
 # Função para buscar dados atualizados da planilha
 @st.cache_data(ttl=5)
 def load_data():
@@ -59,6 +72,9 @@ def load_data():
         expanded = []
         for idx, r in enumerate(data, start=2):
             r["sheet_row_idx"] = idx
+            # Limpa os valores monetários na leitura para o motor do app não bugar
+            r["amount"] = clean_float(r.get("amount", 0.0))
+            r["installment_value"] = clean_float(r.get("installment_value", 0.0))
             expanded.append(r)
             
         df = pd.DataFrame(expanded)
@@ -103,8 +119,8 @@ filtered_records = []
 for r in records:
     try:
         r_date = r["created_at"]
-        amount = float(r["amount"]) if r["amount"] != "" else 0.0
-        inst_val = float(r["installment_value"]) if r["installment_value"] != "" else 0.0
+        amount = float(r["amount"])
+        inst_val = float(r["installment_value"])
     except Exception:
         continue
     
@@ -184,10 +200,9 @@ default_method_idx = method_keys.index(default_method_str) if default_method_str
 
 tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
 
-# Formata o valor padrão vindo da edição de forma legível (ex: 76.36 vira "76,36")
 if st.session_state.editing_index is not None:
     try:
-        raw_amount = st.session_state.edit_values.get("amount", "0,01")
+        raw_amount = st.session_state.edit_values.get("amount", 0.01)
         default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
     except Exception:
         default_amount_str = "0,01"
@@ -198,8 +213,6 @@ state_key = "new" if st.session_state.editing_index is None else f"edit_{st.sess
 
 d_col1, d_col2 = st.columns(2)
 tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
-
-# MUDANÇA CRÍTICA: Trocado para text_input para aceitar vírgula e ponto livremente sem reset de milissegundo
 tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 76,36", key=f"amount_str_{state_key}")
 
 installments = int(st.session_state.edit_values.get("installments", 1))
@@ -248,23 +261,30 @@ if submit_btn:
         st.error("Por favor, insira o valor da transação.")
         st.stop()
         
-    # ENGINE DE LIMPEZA BR: Pega o texto digitado, limpa espaços, troca vírgula por ponto e converte para decimal puro
     try:
-        clean_amount_str = tx_amount_str.strip().replace(",", ".")
+        # Etapa de higienização do Python
+        clean_amount_str = tx_amount_str.strip().replace(" ", "")
+        if "," in clean_amount_str and "." in clean_amount_str:
+            clean_amount_str = clean_amount_str.replace(".", "")
+        clean_amount_str = clean_amount_str.replace(",", ".")
         processed_amount = float(clean_amount_str)
     except ValueError:
-        st.error("Valor inválido! Por favor, digite apenas números e use ponto ou vírgula para os centavos (Ex: 76,36).")
+        st.error("Valor inválido! Digite apenas números (Ex: 76,36).")
         st.stop()
         
-    inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
+    processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
+    
+    # SOLUÇÃO BR COMPATÍVEL: Forçamos a string a ir com VÍRGULA explicitamente para o Sheets não quebrar
+    sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
+    sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
     
     updated_row = [
         tx_type,
         tx_desc,
-        processed_amount,
+        sheet_amount, # Salva como texto formatado PT-BR
         tx_method,
         installments,
-        inst_val,
+        sheet_inst_val, # Salva como texto formatado PT-BR
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
