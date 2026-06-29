@@ -839,235 +839,279 @@ if os.path.exists("logo.png"):
 else:
     st.title("Meu App Finanças")
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Saldo em Banco", format_currency(bank_balance))
-col2.metric("Dinheiro Vivo", format_currency(cash_balance))
-col3.metric("Entradas (Mês)", format_currency(total_income_month))
-col4.metric("Saídas (Mês)", format_currency(total_expense_month))
+# Layout principal: área de resumo + nova transação à esquerda,
+# histórico do mês à direita.
+main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
-st.markdown("---")
+with main_col:
+    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+    metric_col1.metric("Saldo em Banco", format_currency(bank_balance))
+    metric_col2.metric("Dinheiro Vivo", format_currency(cash_balance))
+    metric_col3.metric("Entradas (Mês)", format_currency(total_income_month))
+    metric_col4.metric("Saídas (Mês)", format_currency(total_expense_month))
 
-if st.session_state.editing_index is not None:
-    st.warning(f"✏️ Você está EDITANDO a transação: **{st.session_state.edit_values.get('description')}**")
-    if st.button("Cancelar Edição"):
-        st.session_state.editing_index = None
-        st.session_state.edit_values = {}
-        st.rerun()
+    st.markdown("---")
 
-st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
-
-t_col1, t_col2 = st.columns(2)
-default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
-tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
-
-if tx_type == "entrada":
-    method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
-else:
-    method_opts = {
-        "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
-        "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
-        "credito_parcelado": "Crédito Parcelado"
-    }
-
-method_keys = list(method_opts.keys())
-default_method_str = st.session_state.edit_values.get("payment_method", method_keys[0])
-default_method_idx = method_keys.index(default_method_str) if default_method_str in method_keys else 0
-
-tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
-
-if st.session_state.editing_index is not None:
-    try:
-        raw_amount = st.session_state.edit_values.get("amount", 0.01)
-        default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
-    except Exception:
-        default_amount_str = "0,01"
-else:
-    default_amount_str = ""
-
-state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
-state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
-
-st.session_state.form_clear_trigger = False
-
-d_col1, d_col2 = st.columns(2)
-tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
-tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
-
-installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
-card_brand = st.session_state.edit_values.get("card", "")
-is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
-bought_by = st.session_state.edit_values.get("bought_by", "")
-
-if st.session_state.editing_index is not None:
-    tx_date = pd.to_datetime(st.session_state.edit_values.get("created_at", datetime.now()))
-else:
-    tx_date = datetime.now()
-
-if tx_method == "credito_parcelado" and tx_type == "saida":
-    st.markdown("##### 💳 Detalhes do Parcelamento")
-    c_col1, c_col2 = st.columns(2)
-    installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments), key=f"inst_{state_key}")
-    
-    card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon Prime", "Mei Fácil", "Amazon", "Mei PJ"]
-    default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
-    card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx, key=f"card_{state_key}")
-    
-    is_for_someone = st.checkbox("Compra de alguém", value=is_for_someone, key=f"someone_{state_key}")
-    if is_for_someone:
-        bought_by = st.text_input("Quem comprou?", value=bought_by, placeholder="Ex: Nome da pessoa", key=f"buyer_{state_key}")
-
-use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None, key=f"cust_date_{state_key}")
-if use_custom_date:
-    custom_d = st.date_input("Data da transação", tx_date.date(), format="DD/MM/YYYY", key=f"date_pick_{state_key}")
-    st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
-    tx_date = datetime.combine(custom_d, tx_date.time())
-
-tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...", key=f"notes_{state_key}")
-
-button_label = "Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação"
-submit_btn = st.button(button_label, type="primary")
-
-if submit_btn:
-    if not tx_desc:
-        if tx_method == "saque_dinheiro":
-            tx_desc = "Saque dinheiro"
-        else:
-            st.error("Por favor, preencha a descrição.")
-            st.stop()
-            
-    if not tx_amount_str:
-        st.error("Por favor, insira o valor da transação.")
-        st.stop()
-        
-    try:
-        clean_amount_str = tx_amount_str.strip().replace(" ", "")
-        if "," in clean_amount_str and "." in clean_amount_str:
-            clean_amount_str = clean_amount_str.replace(".", "")
-        clean_amount_str = clean_amount_str.replace(",", ".")
-        processed_amount = float(clean_amount_str)
-    except ValueError:
-        st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
-        st.stop()
-        
-    processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
-    
-    updated_row = [
-        tx_type,
-        tx_desc,
-        round(processed_amount, 2),       
-        tx_method,
-        int(installments),                
-        round(processed_inst_val, 2),     
-        card_brand,
-        "TRUE" if is_for_someone else "FALSE",
-        bought_by,
-        tx_date.strftime("%Y-%m-%d %H:%M:%S"),
-        tx_notes
-    ]
-    
-    try:
-        if st.session_state.editing_index is not None:
-            worksheet.update(
-                range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
-                values=[updated_row],
-                value_input_option="UNFORMATTED_VALUE"
-            )
+    if st.session_state.editing_index is not None:
+        st.warning(f"✏️ Você está EDITANDO a transação: **{st.session_state.edit_values.get('description')}**")
+        if st.button("Cancelar Edição"):
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
+            st.rerun()
+
+    # Mantém o formulário compacto e centralizado dentro da coluna principal.
+    form_left_pad, form_area, form_right_pad = st.columns([0.02, 0.96, 0.02])
+
+    with form_area:
+        st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
+
+        t_col1, t_col2 = st.columns(2)
+        default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
+        tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
+
+        if tx_type == "entrada":
+            method_opts = {"pix_conta": "Pix na conta", "dinheiro_vivo": "Dinheiro vivo"}
         else:
-            worksheet.append_row(updated_row, value_input_option="UNFORMATTED_VALUE")
-            
-        st.session_state.form_clear_trigger = True
-        st.session_state.edit_values = {}
-        st.cache_data.clear()
-        st.rerun()
-    except Exception as err:
-        st.error(f"Erro ao salvar na planilha: {err}")
+            method_opts = {
+                "pix": "Pix", "dinheiro_vivo": "Dinheiro vivo", 
+                "saque_dinheiro": "Saque dinheiro", "pagamento_fatura": "Pagamento de fatura", 
+                "credito_parcelado": "Crédito Parcelado"
+            }
 
-st.markdown("---")
-st.header("Histórico do Mês Selecionado")
+        method_keys = list(method_opts.keys())
+        default_method_str = st.session_state.edit_values.get("payment_method", method_keys[0])
+        default_method_idx = method_keys.index(default_method_str) if default_method_str in method_keys else 0
 
-if filtered_records:
-    df_hist = pd.DataFrame(filtered_records)
-    
-    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-    f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
-    f_card = f_col2.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""])
-    f_buyer = f_col3.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""])
-    
-    sort_option = f_col4.selectbox(
-        "Ordenar por",
-        options=[
-            "Data: mais recente no topo",
-            "Data: mais antigo no topo",
-            "Valor: do maior para o menor",
-            "Valor: do menor para o maior"
-        ],
-        index=0
-    )
-    
-    if f_type != "Todos":
-        df_hist = df_hist[df_hist["type"] == f_type]
-    if f_card != "Todos":
-        df_hist = df_hist[df_hist["card"] == f_card]
-    if f_buyer != "Todos":
-        df_hist = df_hist[df_hist["bought_by"] == f_buyer]
-        
-    if sort_option == "Data: mais recente no topo":
-        df_hist = df_hist.sort_values(by="created_at", ascending=False)
-    elif sort_option == "Data: mais antigo no topo":
-        df_hist = df_hist.sort_values(by="created_at", ascending=True)
-    elif sort_option == "Valor: do maior para o menor":
-        df_hist = df_hist.sort_values(by="order_amount", ascending=False)
-    elif sort_option == "Valor: do menor para o maior":
-        df_hist = df_hist.sort_values(by="order_amount", ascending=True)
-        
-    for idx, row in df_hist.iterrows():
-        is_inst = row.get("is_installment_view", False)
-        desc = row["display_description"] if is_inst else row["description"]
-        val = row["display_amount"] if is_inst else row["amount"]
-        
-        prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-        color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
-        
-        dt_obj = pd.to_datetime(row['created_at'])
-        meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
-        if row["card"]:
-            meta += f" | Cartão: {row['card']}"
-        if row["bought_by"]:
-            meta += f" | Compra de: {row['bought_by']}"
+        tx_method = t_col2.selectbox("Método", options=method_keys, index=default_method_idx, format_func=lambda x: method_opts[x])
+
+        if st.session_state.editing_index is not None:
+            try:
+                raw_amount = st.session_state.edit_values.get("amount", 0.01)
+                default_amount_str = f"{float(raw_amount):.2f}".replace(".", ",")
+            except Exception:
+                default_amount_str = "0,01"
+        else:
+            default_amount_str = ""
+
+        state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
+        state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
+
+        st.session_state.form_clear_trigger = False
+
+        d_col1, d_col2 = st.columns(2)
+        tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
+        tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
+
+        installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
+        card_brand = st.session_state.edit_values.get("card", "")
+        is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
+        bought_by = st.session_state.edit_values.get("bought_by", "")
+
+        if st.session_state.editing_index is not None:
+            tx_date = pd.to_datetime(st.session_state.edit_values.get("created_at", datetime.now()))
+        else:
+            tx_date = datetime.now()
+
+        if tx_method == "credito_parcelado" and tx_type == "saida":
+            st.markdown("##### 💳 Detalhes do Parcelamento")
+            c_col1, c_col2 = st.columns(2)
+            installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments), key=f"inst_{state_key}")
             
-        with st.container(border=True):
-            c_left, c_right, c_actions = st.columns([4.5, 1.5, 1.5], vertical_alignment="center")
+            card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon Prime", "Mei Fácil", "Amazon", "Mei PJ"]
+            default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
+            card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx, key=f"card_{state_key}")
             
-            with c_left:
-                st.markdown(f"**{desc}**")
-                st.caption(meta)
+            is_for_someone = st.checkbox("Compra de alguém", value=is_for_someone, key=f"someone_{state_key}")
+            if is_for_someone:
+                bought_by = st.text_input("Quem comprou?", value=bought_by, placeholder="Ex: Nome da pessoa", key=f"buyer_{state_key}")
+
+        use_custom_date = st.checkbox("Usar data diferente de hoje" if st.session_state.editing_index is None else "Alterar data da transação", value=st.session_state.editing_index is not None, key=f"cust_date_{state_key}")
+        if use_custom_date:
+            custom_d = st.date_input("Data da transação", tx_date.date(), format="DD/MM/YYYY", key=f"date_pick_{state_key}")
+            st.caption(f"📅 Data selecionada: **{format_br_date(custom_d)}**")
+            tx_date = datetime.combine(custom_d, tx_date.time())
+
+        tx_notes = st.text_area("Comentários ou observações", value=st.session_state.edit_values.get("notes", ""), placeholder="Ex: Detalhes da compra...", key=f"notes_{state_key}")
+
+        button_label = "Salvar Alterações" if st.session_state.editing_index is not None else "Adicionar Transação"
+        submit_btn = st.button(button_label, type="primary")
+
+        if submit_btn:
+            if not tx_desc:
+                if tx_method == "saque_dinheiro":
+                    tx_desc = "Saque dinheiro"
+                else:
+                    st.error("Por favor, preencha a descrição.")
+                    st.stop()
+                    
+            if not tx_amount_str:
+                st.error("Por favor, insira o valor da transação.")
+                st.stop()
                 
-                clean_notes = str(row["notes"]).strip()
-                clean_desc = str(row["description"]).strip()
-                if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
-                    st.markdown(f"*{row['notes']}*")
-                    
-            with c_right:
-                st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
+            try:
+                clean_amount_str = tx_amount_str.strip().replace(" ", "")
+                if "," in clean_amount_str and "." in clean_amount_str:
+                    clean_amount_str = clean_amount_str.replace(".", "")
+                clean_amount_str = clean_amount_str.replace(",", ".")
+                processed_amount = float(clean_amount_str)
+            except ValueError:
+                st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
+                st.stop()
+                
+            processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
             
-            row_to_target = row["sheet_row_idx"]
-            edit_key = f"edit_{row_to_target}_{idx}"
-            del_key = f"del_{row_to_target}_{idx}"
+            updated_row = [
+                tx_type,
+                tx_desc,
+                round(processed_amount, 2),       
+                tx_method,
+                int(installments),                
+                round(processed_inst_val, 2),     
+                card_brand,
+                "TRUE" if is_for_someone else "FALSE",
+                bought_by,
+                tx_date.strftime("%Y-%m-%d %H:%M:%S"),
+                tx_notes
+            ]
             
-            with c_actions:
-                if st.button("✏️ Editar transação", key=edit_key, help="Editar esta transação", use_container_width=True):
-                    st.session_state.editing_index = row_to_target
-                    st.session_state.edit_values = row.copy()
-                    st.rerun()
+            try:
+                if st.session_state.editing_index is not None:
+                    worksheet.update(
+                        range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
+                        values=[updated_row],
+                        value_input_option="UNFORMATTED_VALUE"
+                    )
+                    st.session_state.editing_index = None
+                    st.session_state.edit_values = {}
+                else:
+                    worksheet.append_row(updated_row, value_input_option="UNFORMATTED_VALUE")
                     
-                if st.button("🗑️ Excluir transação", key=del_key, help="Excluir permanentemente", use_container_width=True):
-                    try:
-                        worksheet.delete_rows(row_to_target)
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as e:
-                        pass
-else:
-    st.info("Nenhuma transação registrada para o período selecionado.")
+                st.session_state.form_clear_trigger = True
+                st.session_state.edit_values = {}
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as err:
+                st.error(f"Erro ao salvar na planilha: {err}")
+
+with history_col:
+    st.subheader("Histórico")
+    history_search = st.text_input(
+        "Pesquisar",
+        placeholder="Buscar por nome ou valor...",
+        key=f"history_search_{selected_month}_{selected_year}",
+        help="Pesquise pelo nome da transação ou pelo valor exibido no mês selecionado."
+    )
+
+    if filtered_records:
+        df_hist = pd.DataFrame(filtered_records)
+
+        with st.expander("Filtros e ordenação", expanded=False):
+            f_type = st.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"], key="hist_filter_type")
+            f_card = st.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""], key="hist_filter_card")
+            f_buyer = st.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""], key="hist_filter_buyer")
+            sort_option = st.selectbox(
+                "Ordenar por",
+                options=[
+                    "Data: mais recente no topo",
+                    "Data: mais antigo no topo",
+                    "Valor: do maior para o menor",
+                    "Valor: do menor para o maior"
+                ],
+                index=0,
+                key="hist_sort_option"
+            )
+
+        if history_search.strip():
+            q = history_search.strip().lower()
+            q_digits = "".join(ch for ch in q if ch.isdigit())
+
+            def row_matches_search(row):
+                is_inst = row.get("is_installment_view", False)
+                desc = str(row.get("display_description", row.get("description", ""))) if is_inst else str(row.get("description", ""))
+                val = row.get("display_amount", row.get("amount", 0)) if is_inst else row.get("amount", 0)
+                try:
+                    val_float = float(val)
+                except Exception:
+                    val_float = 0.0
+                search_parts = [
+                    desc,
+                    str(row.get("notes", "")),
+                    str(row.get("payment_method", "")),
+                    str(row.get("card", "")),
+                    str(row.get("bought_by", "")),
+                    format_currency(val_float),
+                    f"{val_float:.2f}",
+                    f"{val_float:.2f}".replace(".", ","),
+                    str(val),
+                ]
+                joined = " ".join(search_parts).lower()
+                joined_digits = "".join(ch for ch in joined if ch.isdigit())
+                return q in joined or (q_digits and q_digits in joined_digits)
+
+            df_hist = df_hist[df_hist.apply(row_matches_search, axis=1)]
+
+        if f_type != "Todos":
+            df_hist = df_hist[df_hist["type"] == f_type]
+        if f_card != "Todos":
+            df_hist = df_hist[df_hist["card"] == f_card]
+        if f_buyer != "Todos":
+            df_hist = df_hist[df_hist["bought_by"] == f_buyer]
+            
+        if sort_option == "Data: mais recente no topo":
+            df_hist = df_hist.sort_values(by="created_at", ascending=False)
+        elif sort_option == "Data: mais antigo no topo":
+            df_hist = df_hist.sort_values(by="created_at", ascending=True)
+        elif sort_option == "Valor: do maior para o menor":
+            df_hist = df_hist.sort_values(by="order_amount", ascending=False)
+        elif sort_option == "Valor: do menor para o maior":
+            df_hist = df_hist.sort_values(by="order_amount", ascending=True)
+
+        if df_hist.empty:
+            st.info("Nenhuma transação encontrada para a busca/filtros aplicados.")
+        else:
+            st.caption(f"{len(df_hist)} transação(ões) no mês selecionado")
+            for idx, row in df_hist.iterrows():
+                is_inst = row.get("is_installment_view", False)
+                desc = row["display_description"] if is_inst else row["description"]
+                val = row["display_amount"] if is_inst else row["amount"]
+                
+                prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
+                color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
+                
+                dt_obj = pd.to_datetime(row['created_at'])
+                meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
+                if row["card"]:
+                    meta += f" | Cartão: {row['card']}"
+                if row["bought_by"]:
+                    meta += f" | Compra de: {row['bought_by']}"
+                    
+                with st.container(border=True):
+                    st.markdown(f"**{desc}**")
+                    st.caption(meta)
+
+                    clean_notes = str(row["notes"]).strip()
+                    clean_desc = str(row["description"]).strip()
+                    if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
+                        st.markdown(f"*{row['notes']}*")
+
+                    st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
+
+                    row_to_target = row["sheet_row_idx"]
+                    edit_key = f"edit_{row_to_target}_{idx}"
+                    del_key = f"del_{row_to_target}_{idx}"
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("✏️ Editar", key=edit_key, help="Editar esta transação", use_container_width=True):
+                            st.session_state.editing_index = row_to_target
+                            st.session_state.edit_values = row.copy()
+                            st.rerun()
+                    with btn_col2:
+                        if st.button("🗑️ Excluir", key=del_key, help="Excluir permanentemente", use_container_width=True):
+                            try:
+                                worksheet.delete_rows(row_to_target)
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception:
+                                pass
+    else:
+        st.info("Nenhuma transação registrada para o período selecionado.")
