@@ -297,6 +297,58 @@ section.main > div.block-container {
     align-items: center !important;
 }
 
+
+/* 4.2 Seções recolhíveis da sidebar */
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 0 1.8rem 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] details {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    min-height: 1.9rem !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] details > summary:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-radius: 6px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: #ffffff !important;
+    font-family: inherit !important;
+    font-size: 1.05rem !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg *,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg path {
+    color: rgba(255, 255, 255, 0.82) !important;
+    fill: rgba(255, 255, 255, 0.82) !important;
+    stroke: rgba(255, 255, 255, 0.82) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
+    padding: 0.75rem 0 0 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] .streamlit-expanderContent {
+    padding: 0.75rem 0 0 0 !important;
+}
+
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
 div[data-baseweb="select"] > div {
     border-color: #b4b4b4 !important;
@@ -1098,12 +1150,10 @@ def render_credit_cards_sidebar():
         {"name": "Mei", "limit": "R$950", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
     ]
 
-    st.sidebar.markdown('<div class="credit-cards-spacer"></div>', unsafe_allow_html=True)
-    st.sidebar.markdown('<h3 class="credit-cards-title">Cartões de crédito</h3>', unsafe_allow_html=True)
-    st.sidebar.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
 
     for card in credit_cards:
-        logo_col, name_col, date_col = st.sidebar.columns([0.18, 0.35, 0.47], gap="small", vertical_alignment="center")
+        logo_col, name_col, date_col = st.columns([0.18, 0.35, 0.47], gap="small", vertical_alignment="center")
 
         with logo_col:
             if os.path.exists(card["logo"]):
@@ -1127,8 +1177,7 @@ def render_credit_cards_sidebar():
                 unsafe_allow_html=True
             )
 
-
-        st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 def build_top_expenses_chart_html(filtered_records):
     expenses = []
@@ -1200,17 +1249,19 @@ records = load_data()
 render_transaction_animation()
 
 # --- PROCESSAMENTO DOS SALDOS ---
-st.sidebar.markdown('<h3 class="sidebar-section-title">Calendário</h3>', unsafe_allow_html=True)
 current_date = datetime.now()
-selected_month = st.sidebar.selectbox(
-    "Mês", 
-    options=list(range(1, 13)), 
-    index=current_date.month - 1,
-    format_func=lambda x: ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][x-1]
-)
-selected_year = st.sidebar.selectbox("Ano", options=list(range(current_date.year - 5, current_date.year + 6)), index=5)
 
-render_credit_cards_sidebar()
+with st.sidebar.expander("Calendário", expanded=True):
+    selected_month = st.selectbox(
+        "Mês",
+        options=list(range(1, 13)),
+        index=current_date.month - 1,
+        format_func=lambda x: ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][x-1]
+    )
+    selected_year = st.selectbox("Ano", options=list(range(current_date.year - 5, current_date.year + 6)), index=5)
+
+with st.sidebar.expander("Cartões de crédito", expanded=True):
+    render_credit_cards_sidebar()
 
 bank_balance = 0.0
 cash_balance = 0.0
