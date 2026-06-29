@@ -117,7 +117,6 @@ def load_data():
         st.error(f"Erro crítico no processamento dos dados: {e}")
         return []
 
-# Carrega os registros
 records = load_data()
 
 def format_currency(val):
@@ -389,10 +388,9 @@ if filtered_records:
         if row["bought_by"]:
             meta += f" | Compra de: {row['bought_by']}"
             
-        # UI MODERNA: Transformando cada item em um "Card" fechado com borda
         with st.container(border=True):
-            # ALINHAMENTO VERTICAL (Eixo Y): Centralizando o texto, o valor e os botões
-            c_left, c_right, c_actions = st.columns([3.5, 1.5, 0.8], vertical_alignment="center")
+            # MUDANÇA AQUI: Dividimos o card em 4 colunas planas, deixando botões estreitos
+            c_left, c_right, c_edit, c_del = st.columns([4.5, 1.5, 0.3, 0.3], vertical_alignment="center")
             
             with c_left:
                 st.markdown(f"**{desc}**")
@@ -410,23 +408,19 @@ if filtered_records:
             edit_key = f"edit_{row_to_target}_{idx}"
             del_key = f"del_{row_to_target}_{idx}"
             
-            with c_actions:
-                # Alinha os dois botões lado a lado confortavelmente
-                sub_col1, sub_col2 = st.columns(2)
-                
-                with sub_col1:
-                    if st.button("✏️", key=edit_key, help="Editar esta transação"):
-                        st.session_state.editing_index = row_to_target
-                        st.session_state.edit_values = row.copy()
+            with c_edit:
+                if st.button("✏️", key=edit_key, help="Editar esta transação"):
+                    st.session_state.editing_index = row_to_target
+                    st.session_state.edit_values = row.copy()
+                    st.rerun()
+                    
+            with c_del:
+                if st.button("🗑️", key=del_key, help="Excluir permanentemente"):
+                    try:
+                        worksheet.delete_rows(row_to_target)
+                        st.cache_data.clear()
                         st.rerun()
-                        
-                with sub_col2:
-                    if st.button("🗑️", key=del_key, help="Excluir permanentemente"):
-                        try:
-                            worksheet.delete_rows(row_to_target)
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e:
-                            pass
+                    except Exception as e:
+                        pass
 else:
     st.info("Nenhuma transação registrada para o período selecionado.")
