@@ -13,7 +13,7 @@ st.markdown("""
 <style>
 /* 1. Cores de Destaque Global (Remove o Laranja) */
 :root {
-    --primary-color: #388253 !important;
+    --primary-color: #318655 !important;
 }
 
 /* 2. Fundo Principal */
@@ -29,31 +29,16 @@ st.markdown("""
     color: #ffffff !important;
 }
 
-/* 4. Botão de Abrir/Fechar Sidebar */
-/* Menu fechado: botão de abrir em verde */
-[data-testid="collapsedControl"],
-[data-testid="collapsedControl"] *,
-[data-testid="collapsedControl"] svg,
-[data-testid="collapsedControl"] svg path {
-    color: #388253 !important;
-    fill: #388253 !important;
-    stroke: #388253 !important;
+/* 4. Botão de Abrir/Fechar Sidebar (O SEGREDO) */
+/* Quando está fechada (ícone de abrir) - Fica Verde */
+[data-testid="collapsedControl"] svg {
+    color: #318655 !important;
+    fill: #318655 !important;
 }
-
-/* Menu aberto: botão de recolher em cinza claro */
-[data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebarCollapseButton"] *,
-[data-testid="stSidebarCollapseButton"] svg,
-[data-testid="stSidebarCollapseButton"] svg path {
-    color: #d1d5db !important;
-    fill: #d1d5db !important;
-    stroke: #d1d5db !important;
-}
-
-/* Hover mais suave, sem laranja */
-[data-testid="collapsedControl"]:hover,
-[data-testid="stSidebarCollapseButton"]:hover {
-    background-color: rgba(56, 130, 83, 0.10) !important;
+/* Quando está aberta (ícone de fechar) - Fica Branco */
+[data-testid="stSidebarCollapseButton"] svg {
+    color: #ffffff !important;
+    fill: #ffffff !important;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
@@ -92,7 +77,6 @@ try:
     CLIENT_EMAIL = st.secrets["connections"]["gsheets"]["client_email"]
     PRIVATE_KEY_ID = st.secrets["connections"]["gsheets"]["private_key_id"]
     CLIENT_ID = st.secrets["connections"]["gsheets"]["client_id"]
-    PRIVATE_KEY = st.secrets["connections"]["gsheets"]["private_key"]
 except Exception:
     st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
