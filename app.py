@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 import dateutil.relativedelta
@@ -421,6 +422,137 @@ div.stButton > button[kind="primary"] {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# Fallback em JavaScript para exibir "Mostrar menu" quando a sidebar estiver recolhida.
+# Usamos isso porque o botão nativo do Streamlit muda de seletor entre versões,
+# e às vezes o pseudo-elemento CSS não é aplicado no controle recolhido.
+components.html(
+    """
+    <script>
+    (function () {
+        function getParentDocument() {
+            try {
+                return window.parent && window.parent.document ? window.parent.document : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function sidebarIsOpen(doc) {
+            const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return false;
+
+            const rect = sidebar.getBoundingClientRect();
+            const style = window.parent.getComputedStyle(sidebar);
+            return rect.width > 120 && style.display !== 'none' && style.visibility !== 'hidden';
+        }
+
+        function findCollapsedButton(doc) {
+            const preferredSelectors = [
+                '[data-testid="collapsedControl"] button',
+                '[data-testid="stSidebarCollapsedControl"] button',
+                'button[aria-label*="sidebar" i]',
+                'button[aria-label*="menu" i]',
+                'button[aria-label*="Open" i]',
+                'button[aria-label*="Expand" i]',
+                'button[aria-label*="Abrir" i]',
+                'button[aria-label*="Expandir" i]',
+                'button[title*="sidebar" i]',
+                'button[title*="menu" i]',
+                'button[title*="Open" i]',
+                'button[title*="Expand" i]',
+                'button[title*="Abrir" i]',
+                'button[title*="Expandir" i]'
+            ];
+
+            for (const selector of preferredSelectors) {
+                const btn = doc.querySelector(selector);
+                if (btn && btn.querySelector('svg')) return btn;
+            }
+
+            // Fallback visual: pega o primeiro botão com SVG no canto superior esquerdo.
+            const buttons = Array.from(doc.querySelectorAll('button'));
+            return buttons.find((btn) => {
+                const rect = btn.getBoundingClientRect();
+                return btn.querySelector('svg') && rect.left >= 0 && rect.left < 120 && rect.top >= 0 && rect.top < 140;
+            });
+        }
+
+        function ensureLabel(doc) {
+            let label = doc.getElementById('custom-show-menu-label');
+            if (!label) {
+                label = doc.createElement('div');
+                label.id = 'custom-show-menu-label';
+                label.textContent = 'Mostrar menu';
+                label.style.position = 'fixed';
+                label.style.zIndex = '9999999';
+                label.style.color = '#6f737b';
+                label.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                label.style.fontSize = '0.9rem';
+                label.style.fontWeight = '400';
+                label.style.lineHeight = '1';
+                label.style.whiteSpace = 'nowrap';
+                label.style.pointerEvents = 'none';
+                label.style.transform = 'translateY(-50%)';
+                doc.body.appendChild(label);
+            }
+            return label;
+        }
+
+        function paintCollapsedButton(btn) {
+            if (!btn) return;
+            btn.style.color = '#388253';
+            btn.style.background = 'transparent';
+            btn.style.boxShadow = 'none';
+            btn.style.overflow = 'visible';
+
+            btn.querySelectorAll('svg, svg *').forEach((el) => {
+                el.style.color = '#388253';
+                el.style.fill = '#388253';
+                el.style.stroke = '#388253';
+                el.style.opacity = '1';
+                el.style.filter = 'none';
+            });
+        }
+
+        function updateLabel() {
+            const doc = getParentDocument();
+            if (!doc || !doc.body) return;
+
+            const label = ensureLabel(doc);
+            if (sidebarIsOpen(doc)) {
+                label.style.display = 'none';
+                return;
+            }
+
+            const btn = findCollapsedButton(doc);
+            if (!btn) {
+                label.style.display = 'none';
+                return;
+            }
+
+            const rect = btn.getBoundingClientRect();
+            paintCollapsedButton(btn);
+
+            label.style.display = 'block';
+            label.style.left = (rect.right + 8) + 'px';
+            label.style.top = (rect.top + rect.height / 2) + 'px';
+        }
+
+        const doc = getParentDocument();
+        if (!doc || !doc.body) return;
+
+        updateLabel();
+        const observer = new MutationObserver(updateLabel);
+        observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
+        window.setInterval(updateLabel, 400);
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
+
 
 # Puxa os dados básicos salvos no Secrets do site
 try:
