@@ -42,11 +42,13 @@ except Exception as e:
     st.error(f"Erro ao conectar com a planilha: {e}")
     st.stop()
 
-# Gerenciador de estado para edição
+# Gerenciador de estado para edição e limpeza automática
 if "editing_index" not in st.session_state:
     st.session_state.editing_index = None
 if "edit_values" not in st.session_state:
     st.session_state.edit_values = {}
+if "form_clear_trigger" not in st.session_state:
+    st.session_state.form_clear_trigger = False
 
 # Conversor robusto para leitura de saldos e tabelas
 def clean_float(val):
@@ -207,11 +209,16 @@ if st.session_state.editing_index is not None:
 else:
     default_amount_str = ""
 
-state_key = "new" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
+# Adiciona um modificador na chave se o formulário acabou de ser limpo para forçar o reset do layout
+state_modifier = datetime.now().strftime("%M%S") if st.session_state.form_clear_trigger else ""
+state_key = f"new_{state_modifier}" if st.session_state.editing_index is None else f"edit_{st.session_state.editing_index}"
+
+# Reseta o gatilho de limpeza interna
+st.session_state.form_clear_trigger = False
 
 d_col1, d_col2 = st.columns(2)
 tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
-tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 76,36", key=f"amount_str_{state_key}")
+tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
 
 installments = int(st.session_state.edit_values.get("installments", 1))
 card_brand = st.session_state.edit_values.get("card", "")
@@ -266,13 +273,12 @@ if submit_btn:
         clean_amount_str = clean_amount_str.replace(",", ".")
         processed_amount = float(clean_amount_str)
     except ValueError:
-        st.error("Valor inválido! Digite apenas números (Ex: 76,36).")
+        st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
         st.stop()
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # CORREÇÃO DEFINITIVA DO BUG DE VALOR: Forçamos o envio como string contendo exatamente duas casas decimais fixas ("75,50")
-    # Usando o modo USER_ENTERED, o Google Sheets interpretará as duas casas após a vírgula de forma idêntica à digitação humana
+    # NOVA ABORDAGEM MATEMÁTICA BR: Convertemos o valor decimal diretamente em STRING FORMATADA
     sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
     sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
     
@@ -302,6 +308,9 @@ if submit_btn:
         else:
             worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
             
+        # CORREÇÃO DO SEGUNDO PROBLEMA: Ativamos o gatilho de autolimpeza para apagar todos os campos após a conclusão
+        st.session_state.form_clear_trigger = True
+        st.session_state.edit_values = {}
         st.cache_data.clear()
         st.rerun()
     except Exception as err:
@@ -349,7 +358,6 @@ if filtered_records:
             c_left.markdown(f"**{desc}**")
             c_left.caption(meta)
             
-            # CORREÇÃO DO BUG DO BULLET POINT: Se as observações forem idênticas à descrição ou nulas, não exibe a linha duplicada
             clean_notes = str(row["notes"]).strip()
             clean_desc = str(row["description"]).strip()
             if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
