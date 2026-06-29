@@ -61,12 +61,18 @@ div.stButton > button:hover {
     background-color: #ffffff !important;
 }
 
-/* 6. CORREÇÃO: Remove o brilho vermelho padrão do Streamlit ao focar (clicar) em campos */
+/* 6. Remove o brilho vermelho nativo ao focar (clicar) nos campos */
 div[data-baseweb="select"] > div:focus-within,
 div[data-baseweb="input"] > div:focus-within,
 div[data-baseweb="textarea"] > div:focus-within {
     border-color: #318655 !important;
     box-shadow: 0 0 0 1px #318655 !important;
+}
+
+/* 7. Caixas de Seleção (Checkboxes) - Cor Destaque quando ativadas */
+div[data-testid="stCheckbox"] div[data-baseweb="checkbox"] input[type="checkbox"]:checked + div {
+    background-color: #318655 !important;
+    border-color: #318655 !important;
 }
 </style>
 """, unsafe_allow_html=True)
