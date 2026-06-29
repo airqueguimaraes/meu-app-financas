@@ -269,21 +269,27 @@ if submit_btn:
         if "," in clean_amount_str and "." in clean_amount_str:
             clean_amount_str = clean_amount_str.replace(".", "")
         clean_amount_str = clean_amount_str.replace(",", ".")
-        processed_amount = round(float(clean_amount_str), 2)
+        processed_amount = float(clean_amount_str)
     except ValueError:
         st.error("Valor inválido! Digite apenas números (Ex: 45,50).")
         st.stop()
         
-    processed_inst_val = round(processed_amount / installments, 2) if tx_method == "credito_parcelado" else processed_amount
+    processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # MUDANÇA ABSOLUTA: Mandamos a variável como float pura matemática (sem aspas textuais e sem substituições manuais)
+    # 🌟 A MUDANÇA COERENTE COM LOCALIZAÇÃO BRASILEIRA:
+    # Convertemos o número para string com precisão de 2 casas décimais fixa (Ex: 45.50 -> "45,50")
+    # Forçamos a substituição do ponto por vírgula ANTES do envio. 
+    # Voltamos ao modo USER_ENTERED para o Google Sheets entender que isso é um número decimal no padrão PT-BR.
+    sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
+    sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
+    
     updated_row = [
         tx_type,
         tx_desc,
-        processed_amount, # Float numérico puro
+        sheet_amount, 
         tx_method,
         installments,
-        processed_inst_val, # Float numérico puro
+        sheet_inst_val, 
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
@@ -293,17 +299,15 @@ if submit_btn:
     
     try:
         if st.session_state.editing_index is not None:
-            # O segredo final: Mudamos para o formato RAW (Bruto). Ele obriga o Google Sheets a ler o float puro 
-            # sem tentar aplicar conversões textuais inteligentes regionais que quebram a vírgula.
             worksheet.update(
                 range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                 values=[updated_row],
-                value_input_option="RAW"
+                value_input_option="USER_ENTERED"
             )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row, value_input_option="RAW")
+            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
             
         st.session_state.form_clear_trigger = True
         st.session_state.edit_values = {}
