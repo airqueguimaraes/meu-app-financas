@@ -29,154 +29,100 @@ st.markdown("""
     color: #ffffff !important;
 }
 
-/* 4. Botão de Abrir/Fechar Sidebar */
-/*
-   Ajuste mais forte porque o Streamlit muda a opacidade/cor do SVG
-   conforme hover e estado da sidebar. Aqui o SVG original é escondido
-   e desenhamos o chevron com ::before, garantindo contraste fixo.
+/* 4. Botão de Abrir/Fechar Sidebar
+   Versão limpa, sem pseudo-elementos, para evitar ícone duplicado.
 */
 
-/* Base dos controles */
-[data-testid="stSidebarCollapseButton"],
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapsedControl"] {
+/* MENU ABERTO: botão de recolher sempre evidente */
+[data-testid="stSidebarCollapseButton"] {
     opacity: 1 !important;
     visibility: visible !important;
-    z-index: 999999 !important;
-}
-
-[data-testid="stSidebarCollapseButton"] *,
-[data-testid="collapsedControl"] *,
-[data-testid="stSidebarCollapsedControl"] * {
-    opacity: 1 !important;
-    visibility: visible !important;
-}
-
-/* MENU ABERTO: botão de recolher sempre evidente em branco */
-section[data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"] button,
-section[data-testid="stSidebar"][aria-expanded="true"] button[data-testid="stBaseButton-headerNoPadding"],
-section[data-testid="stSidebar"][aria-expanded="true"] button[kind="headerNoPadding"],
-button[title*="Close" i][title*="sidebar" i],
-button[aria-label*="Close" i][aria-label*="sidebar" i],
-button[title*="Collapse" i][title*="sidebar" i],
-button[aria-label*="Collapse" i][aria-label*="sidebar" i] {
-    opacity: 1 !important;
-    visibility: visible !important;
-    background-color: rgba(255, 255, 255, 0.18) !important;
-    color: #ffffff !important;
-    border: 2px solid rgba(255, 255, 255, 0.55) !important;
-    box-shadow: none !important;
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-    min-height: 44px !important;
-    border-radius: 12px !important;
     display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    pointer-events: auto !important;
 }
 
-section[data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"] button:hover,
-section[data-testid="stSidebar"][aria-expanded="true"] button[data-testid="stBaseButton-headerNoPadding"]:hover,
-section[data-testid="stSidebar"][aria-expanded="true"] button[kind="headerNoPadding"]:hover,
-button[title*="Close" i][title*="sidebar" i]:hover,
-button[aria-label*="Close" i][aria-label*="sidebar" i]:hover,
-button[title*="Collapse" i][title*="sidebar" i]:hover,
-button[aria-label*="Collapse" i][aria-label*="sidebar" i]:hover {
-    background-color: rgba(255, 255, 255, 0.26) !important;
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="stSidebarCollapseButton"] [role="button"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    background-color: rgba(255, 255, 255, 0.14) !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    border-radius: 10px !important;
     color: #ffffff !important;
-    border-color: rgba(255, 255, 255, 0.75) !important;
+    box-shadow: none !important;
 }
 
-/* Esconde o SVG original do botão aberto, que estava ficando apagado */
-section[data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"] svg,
-section[data-testid="stSidebar"][aria-expanded="true"] button[data-testid="stBaseButton-headerNoPadding"] svg,
-section[data-testid="stSidebar"][aria-expanded="true"] button[kind="headerNoPadding"] svg,
-button[title*="Close" i][title*="sidebar" i] svg,
-button[aria-label*="Close" i][aria-label*="sidebar" i] svg,
-button[title*="Collapse" i][title*="sidebar" i] svg,
-button[aria-label*="Collapse" i][aria-label*="sidebar" i] svg {
-    display: none !important;
-}
-
-/* Desenha o ícone branco do menu aberto */
-section[data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"] button::before,
-section[data-testid="stSidebar"][aria-expanded="true"] button[data-testid="stBaseButton-headerNoPadding"]::before,
-section[data-testid="stSidebar"][aria-expanded="true"] button[kind="headerNoPadding"]::before,
-button[title*="Close" i][title*="sidebar" i]::before,
-button[aria-label*="Close" i][aria-label*="sidebar" i]::before,
-button[title*="Collapse" i][title*="sidebar" i]::before,
-button[aria-label*="Collapse" i][aria-label*="sidebar" i]::before {
-    content: "«" !important;
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:focus,
+[data-testid="stSidebarCollapseButton"] button:active,
+[data-testid="stSidebarCollapseButton"] [role="button"]:hover,
+[data-testid="stSidebarCollapseButton"] [role="button"]:focus,
+[data-testid="stSidebarCollapseButton"] [role="button"]:active {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+    border-color: rgba(255, 255, 255, 0.55) !important;
     color: #ffffff !important;
-    font-size: 34px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    transform: translateY(-1px) !important;
 }
 
-/* MENU FECHADO: botão de abrir verde #388253, com fundo branco */
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebarCollapseButton"] svg *,
+[data-testid="stSidebarCollapseButton"] svg path {
+    opacity: 1 !important;
+    color: #ffffff !important;
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+    filter: brightness(0) invert(1) !important;
+}
+
+/* MENU FECHADO: botão de abrir verde #388253 sobre fundo branco */
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"] {
     opacity: 1 !important;
     visibility: visible !important;
+    display: flex !important;
+    pointer-events: auto !important;
+    background-color: #ffffff !important;
 }
 
 [data-testid="collapsedControl"] button,
 [data-testid="stSidebarCollapsedControl"] button,
-button[title*="Open" i][title*="sidebar" i],
-button[aria-label*="Open" i][aria-label*="sidebar" i],
-button[title*="Expand" i][title*="sidebar" i],
-button[aria-label*="Expand" i][aria-label*="sidebar" i] {
+[data-testid="collapsedControl"] [role="button"],
+[data-testid="stSidebarCollapsedControl"] [role="button"] {
     opacity: 1 !important;
     visibility: visible !important;
     background-color: #ffffff !important;
-    color: #388253 !important;
     border: none !important;
+    color: #388253 !important;
     box-shadow: none !important;
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-    min-height: 44px !important;
-    border-radius: 12px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
 }
 
 [data-testid="collapsedControl"] button:hover,
+[data-testid="collapsedControl"] button:focus,
+[data-testid="collapsedControl"] button:active,
 [data-testid="stSidebarCollapsedControl"] button:hover,
-button[title*="Open" i][title*="sidebar" i]:hover,
-button[aria-label*="Open" i][aria-label*="sidebar" i]:hover,
-button[title*="Expand" i][title*="sidebar" i]:hover,
-button[aria-label*="Expand" i][aria-label*="sidebar" i]:hover {
+[data-testid="stSidebarCollapsedControl"] button:focus,
+[data-testid="stSidebarCollapsedControl"] button:active,
+[data-testid="collapsedControl"] [role="button"]:hover,
+[data-testid="collapsedControl"] [role="button"]:focus,
+[data-testid="collapsedControl"] [role="button"]:active,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:hover,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:focus,
+[data-testid="stSidebarCollapsedControl"] [role="button"]:active {
     background-color: #ffffff !important;
     color: #388253 !important;
+    box-shadow: none !important;
 }
 
-/* Esconde o SVG original do botão fechado, que estava cinza */
 [data-testid="collapsedControl"] svg,
+[data-testid="collapsedControl"] svg *,
+[data-testid="collapsedControl"] svg path,
 [data-testid="stSidebarCollapsedControl"] svg,
-button[title*="Open" i][title*="sidebar" i] svg,
-button[aria-label*="Open" i][aria-label*="sidebar" i] svg,
-button[title*="Expand" i][title*="sidebar" i] svg,
-button[aria-label*="Expand" i][aria-label*="sidebar" i] svg {
-    display: none !important;
-}
-
-/* Desenha o ícone verde do menu fechado */
-[data-testid="collapsedControl"] button::before,
-[data-testid="stSidebarCollapsedControl"] button::before,
-button[title*="Open" i][title*="sidebar" i]::before,
-button[aria-label*="Open" i][aria-label*="sidebar" i]::before,
-button[title*="Expand" i][title*="sidebar" i]::before,
-button[aria-label*="Expand" i][aria-label*="sidebar" i]::before {
-    content: "»" !important;
+[data-testid="stSidebarCollapsedControl"] svg *,
+[data-testid="stSidebarCollapsedControl"] svg path {
+    opacity: 1 !important;
     color: #388253 !important;
-    font-size: 34px !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    transform: translateY(-1px) !important;
+    fill: #388253 !important;
+    stroke: #388253 !important;
+    filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
