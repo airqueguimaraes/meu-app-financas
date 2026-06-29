@@ -409,7 +409,9 @@ div.stButton > button[kind="primary"] {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
+    z-index: 5;
 }
 
 .top-expenses-title {
@@ -458,6 +460,72 @@ div.stButton > button[kind="primary"] {
     overflow: hidden;
     text-overflow: ellipsis;
     margin-top: 0.16rem;
+}
+
+.top-expense-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.35rem);
+    transform: translateX(-50%) translateY(4px);
+    min-width: 128px;
+    max-width: 190px;
+    padding: 0.42rem 0.5rem;
+    border-radius: 10px;
+    background: rgba(38, 43, 53, 0.96);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(38, 43, 53, 0.20);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 50;
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+    text-align: left;
+}
+
+.top-expense-tooltip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    transform: translateX(-50%);
+    width: 10px;
+    height: 10px;
+    background: rgba(38, 43, 53, 0.96);
+    rotate: 45deg;
+}
+
+.top-expense-tooltip-name {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: normal;
+    word-break: break-word;
+    margin-bottom: 0.18rem;
+}
+
+.top-expense-tooltip-value {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #e8f5ee;
+    white-space: nowrap;
+}
+
+.top-expense-bar-slot:hover {
+    z-index: 60;
+}
+
+.top-expense-bar-slot:hover .top-expense-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.top-expense-bar-slot:hover .top-expense-bar {
+    filter: brightness(0.96);
+    transform: translateY(-2px);
 }
 
 .top-expense-bar-empty {
@@ -1083,7 +1151,11 @@ def build_top_expenses_chart_html(filtered_records):
             value = html.escape(format_currency(item["amount"]))
             color = colors[idx % len(colors)]
             bars_html.append(
-                f'<div class="top-expense-bar-slot" title="{desc} • {value}">'
+                f'<div class="top-expense-bar-slot">'
+                f'<div class="top-expense-tooltip">'
+                f'<span class="top-expense-tooltip-name">{desc}</span>'
+                f'<span class="top-expense-tooltip-value">{value}</span>'
+                f'</div>'
                 f'<div class="top-expense-bar" style="height:{height:.1f}%; background:{color};"></div>'
                 f'<div class="top-expense-bar-label">{idx + 1}</div>'
                 f'</div>'
