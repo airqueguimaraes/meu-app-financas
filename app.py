@@ -127,39 +127,70 @@ st.markdown("""
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
 .credit-cards-spacer {
-    height: 2.25rem;
+    height: 2rem;
 }
 
 .credit-cards-title {
     color: #ffffff !important;
-    font-size: 1.18rem !important;
+    font-size: 1.05rem !important;
     font-weight: 700 !important;
     line-height: 1.2 !important;
-    margin: 0 0 0.9rem 0 !important;
+    margin: 0 0 0.8rem 0 !important;
 }
 
 .credit-cards-line {
     width: 100%;
     height: 1px;
     background-color: rgba(255, 255, 255, 0.12);
-    margin: 0 0 1.25rem 0;
+    margin: 0 0 0.95rem 0;
 }
 
-.credit-card-date {
-    margin: 0.12rem 0 0.12rem 0.75rem !important;
-    color: rgba(255, 255, 255, 0.56) !important;
-    font-size: 0.82rem !important;
+.credit-card-info {
+    margin: 0 !important;
+    padding: 0 !important;
+    color: rgba(255, 255, 255, 0.58) !important;
+    font-size: 0.66rem !important;
     font-weight: 500 !important;
-    line-height: 1.28 !important;
+    line-height: 1.22 !important;
+}
+
+.credit-card-info div {
+    margin: 0 0 0.12rem 0 !important;
+    padding: 0 !important;
 }
 
 .credit-card-gap {
-    height: 1.05rem;
+    height: 0.7rem;
+}
+
+.credit-card-logo-fallback {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.58rem;
+    font-weight: 700;
 }
 
 [data-testid="stSidebar"] [data-testid="stImage"] {
-    margin-left: 0.75rem;
-    margin-bottom: 0.55rem;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stImage"] img {
+    display: block !important;
+    width: 28px !important;
+    max-width: 28px !important;
+    height: auto !important;
+    border-radius: 4px !important;
+}
+
+[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
+    align-items: center !important;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
@@ -323,13 +354,25 @@ def render_credit_cards_sidebar():
     st.sidebar.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
 
     for card in credit_cards:
-        if os.path.exists(card["logo"]):
-            st.sidebar.image(card["logo"], width=52)
-        else:
-            st.sidebar.markdown(f'**{card["name"]}**')
+        logo_col, text_col = st.sidebar.columns([0.18, 0.82], gap="small")
 
-        st.sidebar.markdown(f'<p class="credit-card-date">Fechamento: {card["closing_date"]}</p>', unsafe_allow_html=True)
-        st.sidebar.markdown(f'<p class="credit-card-date">Vencimento: {card["due_date"]}</p>', unsafe_allow_html=True)
+        with logo_col:
+            if os.path.exists(card["logo"]):
+                st.image(card["logo"], width=28)
+            else:
+                st.markdown(f'<div class="credit-card-logo-fallback">{card["name"][:2]}</div>', unsafe_allow_html=True)
+
+        with text_col:
+            st.markdown(
+                f"""
+                <div class="credit-card-info">
+                    <div>Fechamento: {card["closing_date"]}</div>
+                    <div>Vencimento: {card["due_date"]}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
 
 # --- PROCESSAMENTO DOS SALDOS ---
