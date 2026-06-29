@@ -62,6 +62,8 @@ def safe_float(val):
 @st.cache_data(ttl=5)
 def load_data():
     try:
+        # Mudamos para ler a matriz bruta de valores da planilha (linhas e colunas puras)
+        # Isso ignora completamente erros de mapeamento de nome de coluna
         raw_rows = worksheet.get_all_values()
         if len(raw_rows) <= 1:
             return []
@@ -69,6 +71,7 @@ def load_data():
         headers = [str(h).strip() for h in raw_rows[0]]
         records_list = []
         
+        # Mapeamento dinâmico posicional baseado nos cabeçalhos reais da sua planilha
         field_map = {
             "type": headers.index("type") if "type" in headers else 0,
             "description": headers.index("description") if "description" in headers else 1,
@@ -84,6 +87,7 @@ def load_data():
         }
 
         for idx, row in enumerate(raw_rows[1:], start=2):
+            # Garante que a linha possui todas as colunas necessárias para não estourar o índice
             while len(row) < len(headers):
                 row.append("")
                 
@@ -101,13 +105,16 @@ def load_data():
                 "notes": str(row[field_map["notes"]]).strip(),
             }
             
+            # Tratamento ultra-robusto de data
             raw_date = str(row[field_map["created_at"]]).strip()
             try:
                 r["created_at"] = pd.to_datetime(raw_date, errors='raise')
             except Exception:
                 try:
+                    # Tenta o formato ISO padrão salvo pelo app
                     r["created_at"] = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
                 except Exception:
+                    # Fallback definitivo para evitar que a linha suma do histórico
                     r["created_at"] = datetime.now()
                     
             records_list.append(r)
@@ -150,6 +157,7 @@ for r in records:
     amount = r["amount"]
     inst_val = r["installment_value"]
     
+    # Atualização global dos saldos gerais da conta
     if r["type"] == "entrada":
         if r["payment_method"] == "pix_conta":
             bank_balance += amount
@@ -164,10 +172,9 @@ for r in records:
         else: 
             bank_balance -= amount
 
+    # Separação e somatório do histórico do mês selecionado
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
-            # Para registros comuns, usamos o amount real na hora de ordenar
-            r["order_amount"] = amount
             filtered_records.append(r)
             if r["type"] == "entrada":
                 total_income_month += amount
@@ -185,8 +192,6 @@ for r in records:
                 inst_record["display_description"] = f"{r['description']} ({i}/{total_inst})"
                 inst_record["display_amount"] = inst_val
                 inst_record["is_installment_view"] = True
-                # Para parcelas, a ordenação visual por valor deve considerar o valor da parcela individual
-                inst_record["order_amount"] = inst_val
                 filtered_records.append(inst_record)
                 total_expense_month += inst_val
 
@@ -343,26 +348,15 @@ st.header("Histórico do Mês Selecionado")
 
 if filtered_records:
     df_hist = pd.DataFrame(filtered_records)
-    
-    # Adicionamos uma nova linha de colunas de controle para os Filtros e para a nova ORDENAÇÃO
-    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+    f_col1, f_col2, f_col3 = st.columns(3)
     f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
-    f_card = f_col2.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""])
-    f_buyer = f_col3.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""])
     
-    # 🌟 NOVA FUNCIONALIDADE: Caixa de seleção para ordenar a lista
-    sort_option = f_col4.selectbox(
-        "Ordenar por",
-        options=[
-            "Data: mais recente no topo",
-            "Data: mais antigo no topo",
-            "Valor: do maior para o menor",
-            "Valor: do menor para o maior"
-        ],
-        index=0 # Padrão: Mais recente no topo
-    )
+    cards_available = ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""]
+    f_card = f_col2.selectbox("Filtrar por Cartão", cards_available)
     
-    # Executa os filtros primeiro
+    buyers_available = ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""]
+    f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
+    
     if f_type != "Todos":
         df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
@@ -370,17 +364,7 @@ if filtered_records:
     if f_buyer != "Todos":
         df_hist = df_hist[df_hist["bought_by"] == f_buyer]
         
-    # 🌟 NOVA FUNCIONALIDADE: Aplica as regras de ordenação baseadas na escolha do usuário
-    if sort_option == "Data: mais recente no topo":
-        df_hist = df_hist.sort_values(by="created_at", ascending=False)
-    elif sort_option == "Data: mais antigo no topo":
-        df_hist = df_hist.sort_values(by="created_at", ascending=True)
-    elif sort_option == "Valor: do maior para o menor":
-        df_hist = df_hist.sort_values(by="order_amount", ascending=False)
-    elif sort_option == "Valor: do menor para o maior":
-        df_hist = df_hist.sort_values(by="order_amount", ascending=True)
-        
-    for idx, row in df_hist.iterrows():
+    for idx, row in df_hist.sort_values(by="created_at", ascending=False).iterrows():
         is_inst = row.get("is_installment_view", False)
         desc = row["display_description"] if is_inst else row["description"]
         val = row["display_amount"] if is_inst else row["amount"]
