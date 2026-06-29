@@ -1055,6 +1055,35 @@ body,
     }
 }
 
+
+/* 13. Ícone customizado de abrir sidebar no mobile
+   Em alguns builds do Streamlit/iOS, o SVG nativo herda opacidade/transparência.
+   Em vez de depender da cor do SVG nativo, escondemos o SVG original via JS
+   e desenhamos um ícone próprio por cima, sem bloquear o clique. */
+#custom-sidebar-open-icon {
+    position: fixed !important;
+    z-index: 10000000 !important;
+    color: #388253 !important;
+    -webkit-text-fill-color: #388253 !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 2.05rem !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    text-shadow: 0 0 0 #388253, 0 1px 1px rgba(0,0,0,0.08) !important;
+    pointer-events: none !important;
+    transform: translate(-50%, -50%) !important;
+}
+
+@media (max-width: 768px) {
+    #custom-sidebar-open-icon {
+        font-size: 2.25rem !important;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1146,6 +1175,33 @@ components.html(
             return label;
         }
 
+        function ensureOpenIcon(doc) {
+            let icon = doc.getElementById('custom-sidebar-open-icon');
+            if (!icon) {
+                icon = doc.createElement('div');
+                icon.id = 'custom-sidebar-open-icon';
+                icon.textContent = '»';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.style.position = 'fixed';
+                icon.style.zIndex = '10000000';
+                icon.style.color = '#388253';
+                icon.style.webkitTextFillColor = '#388253';
+                icon.style.fontFamily = 'Arial, Helvetica, sans-serif';
+                icon.style.fontSize = window.innerWidth <= 768 ? '2.25rem' : '2.05rem';
+                icon.style.fontWeight = '900';
+                icon.style.lineHeight = '1';
+                icon.style.opacity = '1';
+                icon.style.visibility = 'visible';
+                icon.style.filter = 'none';
+                icon.style.mixBlendMode = 'normal';
+                icon.style.pointerEvents = 'none';
+                icon.style.transform = 'translate(-50%, -50%)';
+                icon.style.textShadow = '0 0 0 #388253, 0 1px 1px rgba(0,0,0,0.08)';
+                doc.body.appendChild(icon);
+            }
+            return icon;
+        }
+
         function paintCollapsedButton(btn) {
             if (!btn) return;
 
@@ -1171,13 +1227,16 @@ components.html(
             btn.style.mixBlendMode = 'normal';
 
             btn.querySelectorAll('svg, svg *, path').forEach((el) => {
-                el.style.color = '#388253';
-                el.style.fill = '#388253';
-                el.style.stroke = '#388253';
-                el.style.opacity = '1';
-                el.style.visibility = 'visible';
-                el.style.filter = 'none';
-                el.style.mixBlendMode = 'normal';
+                // O SVG nativo é escondido porque em iOS/Streamlit ele pode continuar
+                // translúcido mesmo com fill/stroke forçados. O ícone visível é
+                // desenhado por #custom-sidebar-open-icon, sem bloquear o clique.
+                el.style.setProperty('color', '#388253', 'important');
+                el.style.setProperty('fill', '#388253', 'important');
+                el.style.setProperty('stroke', '#388253', 'important');
+                el.style.setProperty('opacity', '0', 'important');
+                el.style.setProperty('visibility', 'hidden', 'important');
+                el.style.setProperty('filter', 'none', 'important');
+                el.style.setProperty('mix-blend-mode', 'normal', 'important');
             });
         }
 
@@ -1186,9 +1245,11 @@ components.html(
             if (!doc || !doc.body) return;
 
             const label = ensureLabel(doc);
+            const icon = ensureOpenIcon(doc);
 
             if (sidebarIsOpen(doc)) {
                 label.style.display = 'none';
+                icon.style.display = 'none';
                 return;
             }
 
@@ -1197,15 +1258,22 @@ components.html(
                 const rect = btn.getBoundingClientRect();
                 paintCollapsedButton(btn);
 
+                // Posiciona o ícone customizado exatamente sobre a seta nativa.
+                icon.style.left = (rect.left + rect.width / 2) + 'px';
+                icon.style.top = (rect.top + rect.height / 2) + 'px';
+
                 label.style.left = (rect.right + 8) + 'px';
-                // Ajuste fino: desce 20% em relação ao ajuste anterior.
-                label.style.top = (rect.top + rect.height / 2 - 22) + 'px';
+                // Ajuste fino já aprovado para mobile.
+                label.style.top = (rect.top + rect.height / 2 - 18) + 'px';
             } else {
-                // Fallback fixo: exatamente a região superior esquerda onde a seta aparece.
+                // Fallback fixo: região superior esquerda onde a seta aparece.
+                icon.style.left = '28px';
+                icon.style.top = '42px';
                 label.style.left = '64px';
                 label.style.top = '24px';
             }
 
+            icon.style.display = 'block';
             label.style.display = 'block';
         }
 
