@@ -178,130 +178,14 @@ section.main > div.block-container {
     filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
 }
 
-/* Texto ao lado do botão quando o menu lateral está fechado
-   O Streamlit muda o seletor desse botão entre versões, então miramos tanto
-   nos data-testid quanto nos aria-label/title de abrir/expandir. */
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapsedControl"] {
-    align-items: center !important;
-    gap: 0 !important;
-    overflow: visible !important;
-    width: auto !important;
-    max-width: none !important;
-    z-index: 999999 !important;
-}
-
-[data-testid="collapsedControl"] button,
-[data-testid="stSidebarCollapsedControl"] button,
-[data-testid="collapsedControl"] [role="button"],
-[data-testid="stSidebarCollapsedControl"] [role="button"],
-button[aria-label*="Open" i],
-button[aria-label*="Expand" i],
-button[aria-label*="Abrir" i],
-button[aria-label*="Expandir" i],
-button[aria-label*="Mostrar" i],
-button[title*="Open" i],
-button[title*="Expand" i],
-button[title*="Abrir" i],
-button[title*="Expandir" i],
-button[title*="Mostrar" i] {
-    position: relative !important;
-    overflow: visible !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 2rem !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    background-color: #ffffff !important;
-    color: #388253 !important;
-    box-shadow: none !important;
-}
-
-[data-testid="collapsedControl"] button::after,
-[data-testid="stSidebarCollapsedControl"] button::after,
-[data-testid="collapsedControl"] [role="button"]::after,
-[data-testid="stSidebarCollapsedControl"] [role="button"]::after,
-button[aria-label*="Open" i]::after,
-button[aria-label*="Expand" i]::after,
-button[aria-label*="Abrir" i]::after,
-button[aria-label*="Expandir" i]::after,
-button[aria-label*="Mostrar" i]::after,
-button[title*="Open" i]::after,
-button[title*="Expand" i]::after,
-button[title*="Abrir" i]::after,
-button[title*="Expandir" i]::after,
-button[title*="Mostrar" i]::after {
-    content: "Mostrar menu" !important;
-    position: absolute !important;
-    left: calc(100% + 0.45rem) !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    color: #6f737b !important;
-    font-family: inherit !important;
-    font-size: 0.95rem !important;
-    font-weight: 400 !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-    pointer-events: none !important;
-}
-
-button[aria-label*="Open" i] svg,
-button[aria-label*="Expand" i] svg,
-button[aria-label*="Abrir" i] svg,
-button[aria-label*="Expandir" i] svg,
-button[aria-label*="Mostrar" i] svg,
-button[title*="Open" i] svg,
-button[title*="Expand" i] svg,
-button[title*="Abrir" i] svg,
-button[title*="Expandir" i] svg,
-button[title*="Mostrar" i] svg,
-button[aria-label*="Open" i] svg *,
-button[aria-label*="Expand" i] svg *,
-button[aria-label*="Abrir" i] svg *,
-button[aria-label*="Expandir" i] svg *,
-button[aria-label*="Mostrar" i] svg *,
-button[title*="Open" i] svg *,
-button[title*="Expand" i] svg *,
-button[title*="Abrir" i] svg *,
-button[title*="Expandir" i] svg *,
-button[title*="Mostrar" i] svg * {
-    color: #388253 !important;
-    fill: #388253 !important;
-    stroke: #388253 !important;
-    opacity: 1 !important;
-    filter: brightness(0) saturate(100%) invert(42%) sepia(13%) saturate(1697%) hue-rotate(91deg) brightness(93%) contrast(87%) !important;
-}
-
-/* 4.0.1 Texto direto no controle recolhido
-   Aplica o texto no próprio container do botão, porque em algumas versões
-   do Streamlit o pseudo-elemento no button interno não é exibido. */
-[data-testid="collapsedControl"],
-[data-testid="stSidebarCollapsedControl"] {
+/* Texto "Mostrar menu" quando a sidebar está fechada
+   Agora o texto é criado por JavaScript em posição fixa no canto superior esquerdo.
+   Evitamos pseudo-elementos em botões genéricos para não jogar o texto na toolbar do Streamlit. */
+#custom-show-menu-label {
     position: fixed !important;
-    top: 2.05rem !important;
-    left: 1.45rem !important;
-    display: inline-flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 0.5rem !important;
-    width: auto !important;
-    min-width: 11rem !important;
-    max-width: none !important;
-    height: 2rem !important;
-    overflow: visible !important;
-    background: transparent !important;
-    z-index: 999999 !important;
-}
-
-[data-testid="collapsedControl"]::after,
-[data-testid="stSidebarCollapsedControl"]::after {
-    content: "Mostrar menu" !important;
-    display: inline-block !important;
-    position: static !important;
-    transform: none !important;
-    margin-left: 0.1rem !important;
+    left: 4.05rem !important;
+    top: 2.85rem !important;
+    z-index: 9999999 !important;
     color: #6f737b !important;
     font-family: inherit !important;
     font-size: 0.9rem !important;
@@ -309,13 +193,6 @@ button[title*="Mostrar" i] svg * {
     line-height: 1 !important;
     white-space: nowrap !important;
     pointer-events: none !important;
-}
-
-[data-testid="collapsedControl"] button,
-[data-testid="stSidebarCollapsedControl"] button,
-[data-testid="collapsedControl"] [role="button"],
-[data-testid="stSidebarCollapsedControl"] [role="button"] {
-    flex: 0 0 auto !important;
 }
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
@@ -424,8 +301,8 @@ div.stButton > button[kind="primary"] {
 """, unsafe_allow_html=True)
 
 # Fallback em JavaScript para exibir "Mostrar menu" quando a sidebar estiver recolhida.
-# Usamos isso porque o botão nativo do Streamlit muda de seletor entre versões,
-# e às vezes o pseudo-elemento CSS não é aplicado no controle recolhido.
+# O texto é posicionado no canto superior esquerdo, ao lado da seta,
+# sem procurar botões genéricos da toolbar do Streamlit.
 components.html(
     """
     <script>
@@ -444,38 +321,50 @@ components.html(
 
             const rect = sidebar.getBoundingClientRect();
             const style = window.parent.getComputedStyle(sidebar);
-            return rect.width > 120 && style.display !== 'none' && style.visibility !== 'hidden';
+            return rect.width > 120 && style.display !== 'none' && style.visibility !== 'hidden' && rect.left < 20;
         }
 
         function findCollapsedButton(doc) {
-            const preferredSelectors = [
-                '[data-testid="collapsedControl"] button',
-                '[data-testid="stSidebarCollapsedControl"] button',
-                'button[aria-label*="sidebar" i]',
-                'button[aria-label*="menu" i]',
-                'button[aria-label*="Open" i]',
-                'button[aria-label*="Expand" i]',
-                'button[aria-label*="Abrir" i]',
-                'button[aria-label*="Expandir" i]',
-                'button[title*="sidebar" i]',
-                'button[title*="menu" i]',
-                'button[title*="Open" i]',
-                'button[title*="Expand" i]',
-                'button[title*="Abrir" i]',
-                'button[title*="Expandir" i]'
+            const specificControls = [
+                '[data-testid="collapsedControl"]',
+                '[data-testid="stSidebarCollapsedControl"]'
             ];
 
-            for (const selector of preferredSelectors) {
-                const btn = doc.querySelector(selector);
-                if (btn && btn.querySelector('svg')) return btn;
+            for (const selector of specificControls) {
+                const control = doc.querySelector(selector);
+                if (!control) continue;
+
+                const target = control.querySelector('button, [role="button"]') || control;
+                const rect = target.getBoundingClientRect();
+                if (rect.left >= 0 && rect.left < 120 && rect.top >= 0 && rect.top < 120) {
+                    return target;
+                }
             }
 
-            // Fallback visual: pega o primeiro botão com SVG no canto superior esquerdo.
-            const buttons = Array.from(doc.querySelectorAll('button'));
-            return buttons.find((btn) => {
-                const rect = btn.getBoundingClientRect();
-                return btn.querySelector('svg') && rect.left >= 0 && rect.left < 120 && rect.top >= 0 && rect.top < 140;
-            });
+            // Fallback seguro: somente elementos com SVG no canto superior esquerdo.
+            // Isso evita pegar botões da toolbar, que ficam no canto superior direito.
+            const candidates = Array.from(doc.querySelectorAll('button, [role="button"]'))
+                .filter((el) => {
+                    const rect = el.getBoundingClientRect();
+                    return (
+                        el.querySelector('svg') &&
+                        rect.left >= 0 &&
+                        rect.left < 110 &&
+                        rect.top >= 0 &&
+                        rect.top < 120 &&
+                        rect.width > 0 &&
+                        rect.width < 90 &&
+                        rect.height > 0 &&
+                        rect.height < 90
+                    );
+                })
+                .sort((a, b) => {
+                    const ar = a.getBoundingClientRect();
+                    const br = b.getBoundingClientRect();
+                    return (ar.left + ar.top) - (br.left + br.top);
+                });
+
+            return candidates.length ? candidates[0] : null;
         }
 
         function ensureLabel(doc) {
@@ -501,6 +390,7 @@ components.html(
 
         function paintCollapsedButton(btn) {
             if (!btn) return;
+
             btn.style.color = '#388253';
             btn.style.background = 'transparent';
             btn.style.boxShadow = 'none';
@@ -520,23 +410,26 @@ components.html(
             if (!doc || !doc.body) return;
 
             const label = ensureLabel(doc);
+
             if (sidebarIsOpen(doc)) {
                 label.style.display = 'none';
                 return;
             }
 
             const btn = findCollapsedButton(doc);
-            if (!btn) {
-                label.style.display = 'none';
-                return;
+            if (btn) {
+                const rect = btn.getBoundingClientRect();
+                paintCollapsedButton(btn);
+
+                label.style.left = (rect.right + 8) + 'px';
+                label.style.top = (rect.top + rect.height / 2) + 'px';
+            } else {
+                // Fallback fixo: exatamente a região superior esquerda onde a seta aparece.
+                label.style.left = '64px';
+                label.style.top = '54px';
             }
 
-            const rect = btn.getBoundingClientRect();
-            paintCollapsedButton(btn);
-
             label.style.display = 'block';
-            label.style.left = (rect.right + 8) + 'px';
-            label.style.top = (rect.top + rect.height / 2) + 'px';
         }
 
         const doc = getParentDocument();
@@ -545,14 +438,14 @@ components.html(
         updateLabel();
         const observer = new MutationObserver(updateLabel);
         observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
-        window.setInterval(updateLabel, 400);
+        window.parent.addEventListener('resize', updateLabel);
+        window.setInterval(updateLabel, 350);
     })();
     </script>
     """,
     height=0,
     width=0,
 )
-
 
 # Puxa os dados básicos salvos no Secrets do site
 try:
