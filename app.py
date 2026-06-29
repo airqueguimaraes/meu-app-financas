@@ -7,18 +7,29 @@ from streamlit_gsheets import GSheetsConnection
 # Configuração da página
 st.set_page_config(page_title="Controle Financeiro", layout="wide", initial_sidebar_state="expanded")
 
-# Puxa o link da planilha direto do arquivo secrets que você já configurou
+# Puxa os dados básicos salvos no Secrets do site
 try:
     SPREADSHEET_URL = st.secrets["connections"]["gsheets"]["spreadsheet_url"]
+    PROJECT_ID = st.secrets["connections"]["gsheets"]["project_id"]
+    CLIENT_EMAIL = st.secrets["connections"]["gsheets"]["client_email"]
+    PRIVATE_KEY_ID = st.secrets["connections"]["gsheets"]["private_key_id"]
+    CLIENT_ID = st.secrets["connections"]["gsheets"]["client_id"]
 except Exception:
-    st.error("Erro: Não foi possível encontrar o link da planilha no arquivo secrets.toml")
+    st.error("Erro: Não foi possível encontrar todas as configurações no Secrets do Streamlit.")
     st.stop()
 
-# Injeta a chave privada diretamente por aqui para evitar o erro de formatação do Streamlit Secrets
-st.secrets["connections"]["gsheets"]["private_key"] = "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDwCfI60IKUxHI\njh8rHp+MOYkU/gCL8UB/HJIQbn1FJoTYKG1dwrYws3LvjEjQeS98uU3ZViZ0CEhE\n7VMRfseBtkYcGRcO/3tcswR+7avAkruHvihLseA/BOEM8IeVe5YeafqbqQkWzmNp\nyuPKpIApKfZ3y6XZXu7VK53bXpujHxTkSqyrK7WCbzPuGqQ9ycmJqBLze0s+stfr\n2vcRWBKWM7w/NhcV4QxxPrOg9sGPSUibdc0YhCfwkQyOtUVjBn1f4EVdz7b4+4Be\nTwOj5BBGVYchVEx7Pa5MOVljzt5It/KU2ovvz3dC4zPvg8nWYAdxaJiTPbbl1aL7\nieUGh7krAgMBAAECggEACYYt6V6uReZTdS3vt59eepTKEKq9yBFNkWGzJvgultC6\n90bFm3bqemV2GtBOh/t9eKoOGZxRc/p7LwSvsqg3zh3aPL++bs0LaYU5m3C2Qeu3\nEscJGuBlXWuVWkB8YvoyYaRyZw8gZsBVTJkXNY2EwXv4hqJH8tLloprkAVURvtah\nyUU7nYVtLbd9LyJK0EmWJTW3AOhL59yx2RY90lPG25FVkQH/fMe5uRWiTjHTL++4\nb5xKqKJ6u6rP3sI/wB4YtrJff0+4weSzZr2tJjmT0HVZ5/Ms/Kkoq8ALTVBJqo6w\nRBWCZQBIuASGU64nz5Nj8wxs2m3/EKq8NNpyynbZ4QKBgQDya4pQLepgdbtCEahe\nHJn2620u39jwMYyn0uGwtkfq3HmTyW++EeFSepy/Rts/eDp9U7GQ5+8XB7S6qPeH\nWvM3OLnNHXLsoJo5zwkWiyAYBvlNrsNBkuQ45H3mgh5dJ1Yl5owaVorHQAaHhqaF\nUia5rUDPngU6KGFtykzEQZ/2YwKBgQDOt1hLkau7qxO7YNm852dKjW9hN39JUpLc\n1V38SbNODAes2SX0D/9rHNiYyb7o34kCrT214UbrfD7kh/WiAne5Kdihwco9PHwK\nSMAgs2NpSPROpSp4ltKHDF1gyfVPSUgYkV5a6uPHspW6XNYi7PqPPjYHq+7hXQWP\nMoY3HzoomQKBgQC8y8QMbbX7KbWM3vOhV+UQyIlf2DW72tsQWMwsM8oOv2ZwEpFU\nFdjFw3gP/78Az0G+GVBQ6lDqPrYiKTWd1NdWSndpp2W5o9p46yTIydFU5RmDxneK\nujvDky/6NZwwMFKHceXrHTs3skVjhxpo+nHuaV/wUcEAajJ2rvbaYcGSwQKBgQCC\n5VBQ0dY4CNV+0o4t8y3R5IuBuN2t9U6v7aAM8DJNGosFpZ9F05d+IQ76eM2dsmaU\nvlSURildVhiRJ5Kf2wYqxte5XfgNHK7C6FxYmJ87fQnOfwHMyFxZTbgXYOsoIJQ5\nklt4IMLJokjzcHPcO8lRSSh3ZSTnqbqqeWjJoMl4CQKBgQCcbO7Yy9C7kzB7IzFb\nfp5AVpggR2g/IfYt40OXONapYjEWXqqpIMg97/61SriySoBRDsZB5TdtQ8kr87Kr\noshKbctusiiYkx6CRJ4DMtRuOatPr5tALU+sleYkstGoS+4jkH9CmGspB9ckPKEx\ns8kwm6PMzQBUipYtDcKU3y7crA==\n-----END PRIVATE KEY-----\n"
+# Montamos as credenciais completas aqui, combinando os dados do segredo com a chave privada de forma aceita pelo sistema
+creds = {
+    "type": "service_account",
+    "project_id": PROJECT_ID,
+    "private_key_id": PRIVATE_KEY_ID,
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDDwCfI60IKUxHI\njh8rHp+MOYkU/gCL8UB/HJIQbn1FJoTYKG1dwrYws3LvjEjQeS98uU3ZViZ0CEhE\n7VMRfseBtkYcGRcO/3tcswR+7avAkruHvihLseA/BOEM8IeVe5YeafqbqQkWzmNp\nyuPKpIApKfZ3y6XZXu7VK53bXpujHxTkSqyrK7WCbzPuGqQ9ycmJqBLze0s+stfr\n2vcRWBKWM7w/NhcV4QxxPrOg9sGPSUibdc0YhCfwkQyOtUVjBn1f4EVdz7b4+4Be\nTwOj5BBGVYchVEx7Pa5MOVljzt5It/KU2ovvz3dC4zPvg8nWYAdxaJiTPbbl1aL7\nieUGh7krAgMBAAECggEACYYt6V6uReZTdS3vt59eepTKEKq9yBFNkWGzJvgultC6\n90bFm3bqemV2GtBOh/t9eKoOGZxRc/p7LwSvsqg3zh3aPL++bs0LaYU5m3C2Qeu3\nEscJGuBlXWuVWkB8YvoyYaRyZw8gZsBVTJkXNY2EwXv4hqJH8tLloprkAVURvtah\nyUU7nYVtLbd9LyJK0EmWJTW3AOhL59yx2RY90lPG25FVkQH/fMe5uRWiTjHTL++4\nb5xKqKJ6u6rP3sI/wB4YtrJff0+4weSzZr2tJjmT0HVZ5/Ms/Kkoq8ALTVBJqo6w\nRBWCZQBIuASGU64nz5Nj8wxs2m3/EKq8NNpyynbZ4QKBgQDya4pQLepgdbtCEahe\nHJn2620u39jwMYyn0uGwtkfq3HmTyW++EeFSepy/Rts/eDp9U7GQ5+8XB7S6qPeH\nWvM3OLnNHXLsoJo5zwkWiyAYBvlNrsNBkuQ45H3mgh5dJ1Yl5owaVorHQAaHhqaF\nUia5rUDPngU6KGFtykzEQZ/2YwKBgQDOt1hLkau7qxO7YNm852dKjW9hN39JUpLc\n1V38SbNODAes2SX0D/9rHNiYyb7o34kCrT214UbrfD7kh/WiAne5Kdihwco9PHwK\nSMAgs2NpSPROpSp4ltKHDF1gyfVPSUgYkV5a6uPHspW6XNYi7PqPPjYHq+7hXQWP\nMoY3HzoomQKBgQC8y8QMbbX7KbWM3vOhV+UQyIlf2DW72tsQWMwsM8oOv2ZwEpFU\nFdjFw3gP/78Az0G+GVBQ6lDqPrYiKTWd1NdWSndpp2W5o9p46yTIydFU5RmDxneK\nujvDky/6NZwwMFKHceXrHTs3skVjhxpo+nHuaV/wUcEAajJ2rvbaYcGSwQKBgQCC\n5VBQ0dY4CNV+0o4t8y3R5IuBuN2t9U6v7aAM8DJNGosFpZ9F05d+IQ76eM2dsmaU\nvlSURildVhiRJ5Kf2wYqxte5XfgNHK7C6FxYmJ87fQnOfwHMyFxZTbgXYOsoIJQ5\nklt4IMLJokjzcHPcO8lRSSh3ZSTnqbqqeWjJoMl4CQKBgQCcbO7Yy9C7kzB7IzFb\nfp5AVpggR2g/IfYt40OXONapYjEWXqqpIMg97/61SriySoBRDsZB5TdtQ8kr87Kr\noshKbctusiiYkx6CRJ4DMtRuOatPr5tALU+sleYkstGoS+4jkH9CmGspB9ckPKEx\ns8kwm6PMzQBUipYtDcKU3y7crA==\n-----END PRIVATE KEY-----\n",
+    "client_email": CLIENT_EMAIL,
+    "client_id": CLIENT_ID
+}
 
-# Inicializa a conexão com o Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Inicializa a conexão passando as credenciais seguras de forma direta
+conn = st.connection("gsheets", type=GSheetsConnection, **creds)
 
 # Função para buscar dados atualizados da planilha
 @st.cache_data(ttl=5)
@@ -125,4 +136,98 @@ with st.form("transaction_form", clear_on_submit=True):
     installments = 1
     card_brand = ""
     is_for_someone = False
-    bought_by
+    bought_by = ""
+    
+    if tx_method == "credito_parcelado" and tx_type == "saida":
+        c_col1, c_col2 = st.columns(2)
+        installments = c_col1.number_input("Parcelas", min_value=2, max_value=48, value=2)
+        card_brand = c_col2.selectbox("Cartão", ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"])
+        
+        is_for_someone = st.checkbox("Compra de alguém")
+        if is_for_someone:
+            bought_by = st.text_input("Quem comprou?", placeholder="Ex: João")
+            
+    use_custom_date = st.checkbox("Usar data diferente de hoje")
+    tx_date = datetime.now()
+    if use_custom_date:
+        tx_date = st.date_input("Data da transação", datetime.now())
+        tx_date = datetime.combine(tx_date, datetime.now().time())
+        
+    tx_notes = st.text_area("Comentários ou observações", placeholder="Ex: Observações sobre esta transação")
+    
+    submit_btn = st.form_submit_button("Adicionar Transação")
+    
+    if submit_btn:
+        if not tx_desc:
+            if tx_method == "saque_dinheiro":
+                tx_desc = "Saque dinheiro"
+            else:
+                st.error("Por favor, preencha a descrição.")
+                st.stop()
+                
+        inst_val = tx_amount / installments if tx_method == "credito_parcelado" else tx_amount
+        
+        new_record = {
+            "type": tx_type,
+            "description": tx_desc,
+            "amount": tx_amount,
+            "payment_method": tx_method,
+            "installments": installments,
+            "installment_value": inst_val,
+            "card": card_brand,
+            "is_for_someone": is_for_someone,
+            "bought_by": bought_by,
+            "created_at": tx_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "notes": tx_notes
+        }
+        
+        current_df = pd.DataFrame(records) if records else pd.DataFrame(columns=new_record.keys())
+        new_row_df = pd.DataFrame([new_record])
+        updated_df = pd.concat([current_df, new_row_df], ignore_index=True)
+        
+        conn.update(spreadsheet=SPREADSHEET_URL, data=updated_df)
+        st.cache_data.clear()
+        st.success("Transação salva com sucesso!")
+        st.rerun()
+
+st.markdown("---")
+st.header("Histórico do Mês Selecionado")
+
+if expanded_records:
+    df = pd.DataFrame(expanded_records)
+    f_col1, f_col2, f_col3 = st.columns(3)
+    f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
+    
+    cards_available = ["Todos"] + [c for c in df["card"].dropna().unique() if c != ""]
+    f_card = f_col2.selectbox("Filtrar por Cartão", cards_available)
+    
+    buyers_available = ["Todos"] + [b for b in df["bought_by"].dropna().unique() if b != ""]
+    f_buyer = f_col3.selectbox("Filtrar por Comprador", buyers_available)
+    
+    if f_type != "Todos":
+        df = df[df["type"] == f_type]
+    if f_card != "Todos":
+        df = df[df["card"] == f_card]
+    if f_buyer != "Todos":
+        df = df[df["bought_by"] == f_buyer]
+        
+    for _, row in df.sort_values(by="created_at", ascending=False).iterrows():
+        prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
+        color = "green" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
+        
+        meta = f"{row['payment_method'].replace('_', ' ').title()} | {row['created_at'].strftime('%d/%m/%Y')}"
+        if row["card"]:
+            meta += f" | Cartão: {row['card']}"
+        if row["is_for_someone"] and row["bought_by"]:
+            meta += f" | Compra de: {row['bought_by']}"
+            
+        with st.container():
+            c_left, c_right = st.columns([4, 1])
+            c_left.markdown(f"**{row['description']}**")
+            c_left.caption(meta)
+            if row["notes"] and str(row["notes"]) != "nan":
+                c_left.markdown(f"*{row['notes']}*")
+            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(row['amount'])}</span>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
+else:
+    st.info("Nenhuma transação registrada para o período selecionado.")
