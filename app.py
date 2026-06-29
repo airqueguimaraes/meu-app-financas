@@ -219,7 +219,7 @@ section.main > div.block-container {
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
-    transform: translateY(-1px);
+    transform: translateY(1px);
 }
 
 .credit-card-info div {
@@ -238,11 +238,11 @@ section.main > div.block-container {
     object-fit: contain !important;
     border-radius: 4px !important;
     display: block !important;
-    transform: translateY(2px) !important;
+    transform: none !important;
 }
 
 .credit-card-logo-fallback {
-    transform: translateY(2px) !important;
+    transform: none !important;
     width: 28px;
     height: 28px;
     border-radius: 4px;
