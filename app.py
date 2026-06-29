@@ -979,12 +979,12 @@ with main_col:
                     worksheet.update(
                         range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                         values=[updated_row],
-                        value_input_option="UNFORMATTED_VALUE"
+                        value_input_option="RAW"
                     )
                     st.session_state.editing_index = None
                     st.session_state.edit_values = {}
                 else:
-                    worksheet.append_row(updated_row, value_input_option="UNFORMATTED_VALUE")
+                    worksheet.append_row(updated_row, value_input_option="RAW")
                     
                 st.session_state.form_clear_trigger = True
                 st.session_state.edit_values = {}
