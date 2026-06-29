@@ -29,7 +29,6 @@ creds_dict = {
     "token_uri": "https://oauth2.googleapis.com/token"
 }
 
-# Inicializa o cliente do Google Sheets através do gspread
 @st.cache_resource
 def get_sheets_client():
     return gspread.service_account_from_dict(creds_dict)
@@ -42,7 +41,6 @@ except Exception as e:
     st.error(f"Erro ao conectar com a planilha: {e}")
     st.stop()
 
-# Gerenciador de estado para edição e limpeza automática
 if "editing_index" not in st.session_state:
     st.session_state.editing_index = None
 if "edit_values" not in st.session_state:
@@ -50,7 +48,6 @@ if "edit_values" not in st.session_state:
 if "form_clear_trigger" not in st.session_state:
     st.session_state.form_clear_trigger = False
 
-# Forçador simples de tipo numérico seguro
 def safe_float(val):
     if val == "" or pd.isna(val):
         return 0.0
@@ -58,45 +55,73 @@ def safe_float(val):
         return float(val)
     except (ValueError, TypeError):
         try:
-            val_str = str(val).strip().replace(".", "").replace(",", ".")
-            return float(val_str)
+            return float(str(val).strip().replace(".", "").replace(",", "."))
         except ValueError:
             return 0.0
 
-# Função para buscar dados atualizados da planilha
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
-        if not data:
+        # Mudamos para ler a matriz bruta de valores da planilha (linhas e colunas puras)
+        # Isso ignora completamente erros de mapeamento de nome de coluna
+        raw_rows = worksheet.get_all_values()
+        if len(raw_rows) <= 1:
             return []
-        
-        expanded = []
-        for idx, r in enumerate(data, start=2):
-            r["sheet_row_idx"] = idx
-            r["amount"] = safe_float(r.get("amount", 0.0))
-            r["installment_value"] = safe_float(r.get("installment_value", 0.0))
             
-            # CORREÇÃO CRÍTICA DE DATA: Converte com suporte a múltiplos formatos textuais do Sheets
-            raw_date = r.get("created_at", "")
+        headers = [str(h).strip() for h in raw_rows[0]]
+        records_list = []
+        
+        # Mapeamento dinâmico posicional baseado nos cabeçalhos reais da sua planilha
+        field_map = {
+            "type": headers.index("type") if "type" in headers else 0,
+            "description": headers.index("description") if "description" in headers else 1,
+            "amount": headers.index("amount") if "amount" in headers else 2,
+            "payment_method": headers.index("payment_method") if "payment_method" in headers else 3,
+            "installments": headers.index("installments") if "installments" in headers else 4,
+            "installment_value": headers.index("installment_value") if "installment_value" in headers else 5,
+            "card": headers.index("card") if "card" in headers else 6,
+            "is_for_someone": headers.index("is_for_someone") if "is_for_someone" in headers else 7,
+            "bought_by": headers.index("bought_by") if "bought_by" in headers else 8,
+            "created_at": headers.index("created_at") if "created_at" in headers else 9,
+            "notes": headers.index("notes") if "notes" in headers else 10,
+        }
+
+        for idx, row in enumerate(raw_rows[1:], start=2):
+            # Garante que a linha possui todas as colunas necessárias para não estourar o índice
+            while len(row) < len(headers):
+                row.append("")
+                
+            r = {
+                "sheet_row_idx": idx,
+                "type": str(row[field_map["type"]]).strip(),
+                "description": str(row[field_map["description"]]).strip(),
+                "amount": safe_float(row[field_map["amount"]]),
+                "payment_method": str(row[field_map["payment_method"]]).strip(),
+                "installments": str(row[field_map["installments"]]).strip(),
+                "installment_value": safe_float(row[field_map["installment_value"]]),
+                "card": str(row[field_map["card"]]).strip(),
+                "is_for_someone": str(row[field_map["is_for_someone"]]).strip(),
+                "bought_by": str(row[field_map["bought_by"]]).strip(),
+                "notes": str(row[field_map["notes"]]).strip(),
+            }
+            
+            # Tratamento ultra-robusto de data
+            raw_date = str(row[field_map["created_at"]]).strip()
             try:
-                r["created_at"] = pd.to_datetime(raw_date)
+                r["created_at"] = pd.to_datetime(raw_date, errors='raise')
             except Exception:
                 try:
-                    r["created_at"] = pd.to_datetime(raw_date, format="%Y-%m-%d %H:%M:%S")
+                    # Tenta o formato ISO padrão salvo pelo app
+                    r["created_at"] = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
                 except Exception:
-                    r["created_at"] = pd.to_datetime(datetime.now())
+                    # Fallback definitivo para evitar que a linha suma do histórico
+                    r["created_at"] = datetime.now()
                     
-            expanded.append(r)
+            records_list.append(r)
             
-        df = pd.DataFrame(expanded)
-        cols = ["type", "description", "amount", "payment_method", "installments", "installment_value", "card", "is_for_someone", "bought_by", "created_at", "notes", "sheet_row_idx"]
-        for col in cols:
-            if col not in df.columns:
-                df[col] = ""
-        df = df[cols]
-        return df.to_dict(orient="records")
+        return records_list
     except Exception as e:
+        st.error(f"Erro crítico no processamento dos dados: {e}")
         return []
 
 # Carrega os registros
@@ -128,12 +153,9 @@ total_expense_month = 0.0
 filtered_records = []
 
 for r in records:
-    try:
-        r_date = r["created_at"]
-        amount = float(r["amount"])
-        inst_val = float(r["installment_value"])
-    except Exception:
-        continue
+    r_date = r["created_at"]
+    amount = r["amount"]
+    inst_val = r["installment_value"]
     
     # Atualização global dos saldos gerais da conta
     if r["type"] == "entrada":
@@ -193,7 +215,6 @@ if st.session_state.editing_index is not None:
 
 st.header("Nova Transação" if st.session_state.editing_index is None else "Editar Transação")
 
-# SEÇÃO DE CONTROLE REATIVO
 t_col1, t_col2 = st.columns(2)
 default_type_idx = 0 if st.session_state.edit_values.get("type", "entrada") == "entrada" else 1
 tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"], index=default_type_idx)
@@ -231,7 +252,7 @@ d_col1, d_col2 = st.columns(2)
 tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
 tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
 
-installments = int(st.session_state.edit_values.get("installments", 1))
+installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
 card_brand = st.session_state.edit_values.get("card", "")
 is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
 bought_by = st.session_state.edit_values.get("bought_by", "")
@@ -289,7 +310,6 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # Envia float Python legítimo arredondado
     updated_row = [
         tx_type,
         tx_desc,
