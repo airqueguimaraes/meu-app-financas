@@ -21,6 +21,24 @@ st.markdown("""
     background-color: #ffffff !important;
 }
 
+/* 2.1 Reduz o espaço em branco no topo da área principal */
+.block-container,
+[data-testid="stMain"] .block-container,
+[data-testid="stAppViewContainer"] .block-container,
+section.main > div.block-container {
+    padding-top: 1.6rem !important;
+}
+
+/* Mantém um respiro mínimo no topo em telas menores */
+@media (max-width: 768px) {
+    .block-container,
+    [data-testid="stMain"] .block-container,
+    [data-testid="stAppViewContainer"] .block-container,
+    section.main > div.block-container {
+        padding-top: 1rem !important;
+    }
+}
+
 /* 3. Barra Lateral Escura */
 [data-testid="stSidebar"] {
     background-color: #262b35 !important;
