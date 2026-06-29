@@ -238,10 +238,11 @@ section.main > div.block-container {
     object-fit: contain !important;
     border-radius: 4px !important;
     display: block !important;
-    transform: translateY(3px) !important;
+    transform: translateY(2px) !important;
 }
 
 .credit-card-logo-fallback {
+    transform: translateY(2px) !important;
     width: 28px;
     height: 28px;
     border-radius: 4px;
