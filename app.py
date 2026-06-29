@@ -561,6 +561,10 @@ def render_credit_cards_sidebar():
         {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
         {"name": "Mercado Pago", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
         {"name": "Inter", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
+        {"name": "Nu PJ", "logo": "nu-pj.png", "closing_date": "10", "due_date": "17"},
+        {"name": "PicPay", "logo": "picpay.webp", "closing_date": "02", "due_date": "10"},
+        {"name": "Amazon Prime", "logo": "prime.png", "closing_date": "25", "due_date": "10"},
+        {"name": "Mei Fácil", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
     ]
 
     st.sidebar.markdown('<div class="credit-cards-spacer"></div>', unsafe_allow_html=True)
@@ -722,7 +726,7 @@ if tx_method == "credito_parcelado" and tx_type == "saida":
     c_col1, c_col2 = st.columns(2)
     installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=max(1, installments), key=f"inst_{state_key}")
     
-    card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"]
+    card_opts = ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon Prime", "Mei Fácil", "Amazon", "Mei PJ"]
     default_card_idx = card_opts.index(card_brand) if card_brand in card_opts else 0
     card_brand = c_col2.selectbox("Cartão", card_opts, index=default_card_idx, key=f"card_{state_key}")
     
