@@ -24,13 +24,10 @@ st.markdown("""
 [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label {
     color: #ffffff !important;
 }
-/* Customiza as caixas de seleção da barra lateral para combinarem com o contraste */
-[data-testid="stSidebar"] div[data-baseweb="select"] {
-    background-color: #323844 !important;
-    border-color: #b4b4b4 !important;
-}
+
+/* CORREÇÃO AQUI: Garante que o texto DENTRO da caixa branca de seleção seja escuro */
 [data-testid="stSidebar"] div[data-baseweb="select"] * {
-    color: #ffffff !important;
+    color: #262b35 !important; 
 }
 
 /* 3. Destaques - Botão Primário (Adicionar Transação) */
@@ -442,9 +439,7 @@ if filtered_records:
         val = row["display_amount"] if is_inst else row["amount"]
         
         prefix = "+" if row["type"] == "entrada" else ("" if row["payment_method"] == "saque_dinheiro" else "-")
-        
-        # 🌟 ATUALIZAÇÃO: Alinhando as cores textuais (+) com o tom de Destaque da paleta (#318655)
-        color = "#318655" if row["type"] == "entrada" else ("white" if row["payment_method"] == "saque_dinheiro" else "red")
+        color = "#318655" if row["type"] == "entrada" else ("#b4b4b4" if row["payment_method"] == "saque_dinheiro" else "red")
         
         dt_obj = pd.to_datetime(row['created_at'])
         meta = f"{str(row['payment_method']).replace('_', ' ').title()} | {format_br_date(dt_obj)}"
