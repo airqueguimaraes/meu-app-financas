@@ -1087,6 +1087,341 @@ body,
 </style>
 """, unsafe_allow_html=True)
 
+# Ajuste de tema automático: claro/escuro conforme preferência do dispositivo
+st.markdown("""
+<style>
+/* =========================================================
+   Tema adaptativo por preferência do dispositivo
+   - modo claro: mantém a experiência atual
+   - modo escuro: aplica contraste real na área central
+   ========================================================= */
+
+:root {
+    color-scheme: light dark !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    html,
+    body,
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMain"] .block-container,
+    section.main,
+    section.main > div {
+        background-color: #0f1117 !important;
+        color: #f4f6fb !important;
+        color-scheme: dark !important;
+    }
+
+    [data-testid="stHeader"],
+    header[data-testid="stHeader"],
+    [data-testid="stToolbar"] {
+        background: transparent !important;
+        background-color: transparent !important;
+        color: #f4f6fb !important;
+    }
+
+    [data-testid="stMain"] h1,
+    [data-testid="stMain"] h2,
+    [data-testid="stMain"] h3,
+    [data-testid="stMain"] h4,
+    [data-testid="stMain"] h5,
+    [data-testid="stMain"] h6,
+    [data-testid="stMain"] p,
+    [data-testid="stMain"] span,
+    [data-testid="stMain"] label,
+    [data-testid="stMain"] label p,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"],
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMain"] [data-testid="stMarkdownContainer"] span {
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] label,
+    [data-testid="stMain"] label p {
+        color: #d8dce6 !important;
+        -webkit-text-fill-color: #d8dce6 !important;
+        font-weight: 650 !important;
+    }
+
+    [data-testid="stMain"] small,
+    [data-testid="stMain"] .page-kicker,
+    [data-testid="stMain"] .bill-card-meta,
+    [data-testid="stMain"] .install-step-text,
+    [data-testid="stMain"] .import-summary-label,
+    [data-testid="stMain"] .bills-summary-label {
+        color: #aeb6c5 !important;
+        -webkit-text-fill-color: #aeb6c5 !important;
+    }
+
+    /* Inputs, selects, textareas e popovers */
+    [data-testid="stMain"] [data-testid="stTextInput"] input,
+    [data-testid="stMain"] [data-testid="stNumberInput"] input,
+    [data-testid="stMain"] [data-testid="stDateInput"] input,
+    [data-testid="stMain"] [data-testid="stTextArea"] textarea,
+    [data-testid="stMain"] textarea,
+    [data-testid="stMain"] input,
+    [data-testid="stMain"] div[data-baseweb="select"] > div,
+    [data-testid="stMain"] div[data-baseweb="select"] input,
+    [data-testid="stMain"] div[data-baseweb="select"] span,
+    [data-testid="stMain"] div[data-baseweb="select"] div {
+        background-color: #1d222d !important;
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+        border-color: #3a4150 !important;
+        opacity: 1 !important;
+        caret-color: #f4f6fb !important;
+    }
+
+    [data-testid="stMain"] input::placeholder,
+    [data-testid="stMain"] textarea::placeholder {
+        color: #9aa3b2 !important;
+        -webkit-text-fill-color: #9aa3b2 !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] div[data-baseweb="select"] svg,
+    [data-testid="stMain"] div[data-baseweb="select"] svg path {
+        color: #f4f6fb !important;
+        fill: #f4f6fb !important;
+        stroke: #f4f6fb !important;
+    }
+
+    div[data-baseweb="popover"],
+    div[data-baseweb="popover"] *,
+    div[data-baseweb="menu"],
+    div[data-baseweb="menu"] * {
+        background-color: #1d222d !important;
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+        border-color: #3a4150 !important;
+    }
+
+    div[data-baseweb="calendar"],
+    div[data-baseweb="calendar"] *,
+    [role="dialog"],
+    [role="dialog"] * {
+        background-color: #1d222d !important;
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+    }
+
+    /* Checkbox */
+    [data-testid="stMain"] [data-testid="stCheckbox"] label,
+    [data-testid="stMain"] [data-testid="stCheckbox"] label p,
+    [data-testid="stMain"] [data-testid="stCheckbox"] span {
+        color: #d8dce6 !important;
+        -webkit-text-fill-color: #d8dce6 !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stCheckbox"] div[role="checkbox"] {
+        background-color: #151922 !important;
+        border-color: #4b5563 !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stCheckbox"] div[role="checkbox"][aria-checked="true"] {
+        background-color: #388253 !important;
+        border-color: #388253 !important;
+    }
+
+    /* Cards de saldo no modo escuro */
+    .summary-card {
+        border-color: rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    .summary-card-bank {
+        background: #1b202a !important;
+    }
+
+    .summary-card-cash {
+        background: #302a1e !important;
+    }
+
+    .summary-card-income {
+        background: #173225 !important;
+    }
+
+    .summary-card-expense {
+        background: #3a2021 !important;
+    }
+
+    .summary-card-label,
+    .summary-card-value {
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+    }
+
+    /* Top 10 gastos */
+    .top-expenses-chart {
+        background: #171c26 !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20) !important;
+    }
+
+    .top-expenses-title,
+    .top-expense-bar-label,
+    .top-expenses-chart-empty {
+        color: #cbd2df !important;
+        -webkit-text-fill-color: #cbd2df !important;
+    }
+
+    .top-expense-bar-empty {
+        background: rgba(255, 255, 255, 0.13) !important;
+    }
+
+    .top-expense-tooltip,
+    .top-expense-tooltip::after {
+        background: rgba(7, 10, 16, 0.97) !important;
+    }
+
+    .top-expense-tooltip-name,
+    .top-expense-tooltip-value {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+
+    /* Cards e blocos internos */
+    .bill-card,
+    .bills-summary-card,
+    .import-summary-card,
+    .install-step-card,
+    .install-mini-card {
+        background: #171c26 !important;
+        border-color: rgba(255, 255, 255, 0.09) !important;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.20) !important;
+    }
+
+    .bill-card-title,
+    .bills-summary-value,
+    .import-summary-value,
+    .install-step-title,
+    .install-mini-card {
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+    }
+
+    .bill-card-value {
+        color: #5fd08b !important;
+        -webkit-text-fill-color: #5fd08b !important;
+    }
+
+    .bill-status-pill {
+        background: rgba(95, 208, 139, 0.16) !important;
+        color: #72e19f !important;
+        -webkit-text-fill-color: #72e19f !important;
+    }
+
+    .import-note-box,
+    .install-note-box {
+        background: #13251b !important;
+        border-color: rgba(95, 208, 139, 0.22) !important;
+        color: #d8f3e2 !important;
+        -webkit-text-fill-color: #d8f3e2 !important;
+    }
+
+    .install-final-note {
+        background: #142033 !important;
+        color: #c9ddff !important;
+        -webkit-text-fill-color: #c9ddff !important;
+    }
+
+    .install-step-number {
+        background: rgba(95, 208, 139, 0.18) !important;
+        color: #72e19f !important;
+        -webkit-text-fill-color: #72e19f !important;
+    }
+
+    /* Histórico, expanders, tabelas e botões */
+    [data-testid="stMain"] [data-testid="stExpander"] details,
+    [data-testid="stMain"] [data-testid="stExpander"] details > summary {
+        background-color: #171c26 !important;
+        border-color: rgba(255, 255, 255, 0.10) !important;
+        color: #f4f6fb !important;
+    }
+
+    [data-testid="stMain"] [data-testid="stExpander"] summary p,
+    [data-testid="stMain"] [data-testid="stExpander"] summary svg,
+    [data-testid="stMain"] [data-testid="stExpander"] summary svg * {
+        color: #f4f6fb !important;
+        fill: #f4f6fb !important;
+        stroke: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+    }
+
+    div.stButton > button[kind="secondary"] {
+        border-color: #3a4150 !important;
+        color: #f4f6fb !important;
+        background-color: #171c26 !important;
+    }
+
+    div.stButton > button[kind="secondary"]:hover {
+        border-color: #5fd08b !important;
+        color: #72e19f !important;
+        background-color: #1d2430 !important;
+    }
+
+    div.stButton > button[kind="primary"] {
+        background-color: #328655 !important;
+        color: #ffffff !important;
+    }
+
+    [data-testid="stAlert"] {
+        background-color: #171c26 !important;
+        color: #f4f6fb !important;
+        border-color: rgba(255, 255, 255, 0.10) !important;
+    }
+
+    [data-testid="stAlert"] *,
+    [data-testid="stInfo"] *,
+    [data-testid="stSuccess"] *,
+    [data-testid="stError"] * {
+        color: inherit !important;
+        -webkit-text-fill-color: inherit !important;
+    }
+
+    hr,
+    [data-testid="stDivider"] {
+        border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    /* Dataframes / tabelas do Streamlit */
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] *,
+    [data-testid="stTable"],
+    [data-testid="stTable"] * {
+        background-color: #171c26 !important;
+        color: #f4f6fb !important;
+        -webkit-text-fill-color: #f4f6fb !important;
+        border-color: rgba(255, 255, 255, 0.10) !important;
+    }
+
+    /* Mantém a sidebar escura e consistente */
+    [data-testid="stSidebar"] {
+        background-color: #262b35 !important;
+        color-scheme: dark !important;
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    html,
+    body,
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMain"] .block-container {
+        color-scheme: light !important;
+        background-color: #ffffff !important;
+        color: #2f3341 !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Fallback em JavaScript para exibir "Mostrar menu" quando a sidebar estiver recolhida.
 # O texto é posicionado no canto superior esquerdo, ao lado da seta,
 # sem procurar botões genéricos da toolbar do Streamlit.
