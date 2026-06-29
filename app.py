@@ -326,15 +326,15 @@ div.stButton > button[kind="primary"] {
 .summary-cards-grid {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(0.55rem, 1.2vw, 0.95rem);
     align-items: stretch;
 }
 
 .summary-card {
     border-radius: 22px;
-    padding: 1.15rem 1.3rem 1.2rem 1.3rem;
-    min-height: 118px;
+    padding: clamp(0.9rem, 1.5vw, 1.15rem) clamp(0.85rem, 1.6vw, 1.25rem);
+    min-height: clamp(98px, 9vw, 118px);
     border: 1px solid rgba(38, 43, 53, 0.06);
     box-shadow: 0 10px 24px rgba(38, 43, 53, 0.055);
     display: flex;
@@ -363,36 +363,32 @@ div.stButton > button[kind="primary"] {
 
 .summary-card-label {
     color: #2f3341;
-    font-size: clamp(0.82rem, 4.2cqw, 0.92rem);
+    font-size: clamp(0.68rem, 5.2cqw, 0.9rem);
     font-weight: 600;
-    line-height: 1.15;
-    margin-bottom: 0.55rem;
+    line-height: 1.12;
+    margin-bottom: clamp(0.35rem, 1.6cqw, 0.55rem);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summary-card-value {
     color: #2f3341;
-    font-size: clamp(1.6rem, 15.2cqw, 2.35rem);
+    font-size: clamp(1.22rem, 14.5cqw, 2.25rem);
     font-weight: 500;
-    line-height: 1.05;
-    letter-spacing: -0.035em;
+    line-height: 1.03;
+    letter-spacing: -0.045em;
     white-space: nowrap;
     max-width: 100%;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
     .summary-cards-grid {
-        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 0.85rem;
-    }
-
-    .summary-card {
-        padding: 1rem;
-        min-height: 104px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 560px) {
     .summary-cards-grid {
         grid-template-columns: 1fr;
     }
