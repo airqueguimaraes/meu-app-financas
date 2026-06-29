@@ -323,15 +323,26 @@ div.stButton > button[kind="primary"] {
 
 
 /* 8. Cards de resumo financeiro */
+.summary-cards-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+    gap: 1rem;
+    align-items: stretch;
+}
+
 .summary-card {
     border-radius: 22px;
-    padding: 1.15rem 1.25rem 1.2rem 1.25rem;
+    padding: 1.15rem 1.3rem 1.2rem 1.3rem;
     min-height: 118px;
     border: 1px solid rgba(38, 43, 53, 0.06);
     box-shadow: 0 10px 24px rgba(38, 43, 53, 0.055);
     display: flex;
     flex-direction: column;
     justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    container-type: inline-size;
 }
 
 .summary-card-bank {
@@ -352,7 +363,7 @@ div.stButton > button[kind="primary"] {
 
 .summary-card-label {
     color: #2f3341;
-    font-size: 0.92rem;
+    font-size: clamp(0.82rem, 4.2cqw, 0.92rem);
     font-weight: 600;
     line-height: 1.15;
     margin-bottom: 0.55rem;
@@ -361,23 +372,29 @@ div.stButton > button[kind="primary"] {
 
 .summary-card-value {
     color: #2f3341;
-    font-size: clamp(1.55rem, 2.1vw, 2.35rem);
+    font-size: clamp(1.6rem, 15.2cqw, 2.35rem);
     font-weight: 500;
     line-height: 1.05;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.035em;
     white-space: nowrap;
+    max-width: 100%;
 }
 
 @media (max-width: 1100px) {
+    .summary-cards-grid {
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 0.85rem;
+    }
+
     .summary-card {
         padding: 1rem;
         min-height: 104px;
     }
-    .summary-card-label {
-        font-size: 0.82rem;
-    }
-    .summary-card-value {
-        font-size: 1.55rem;
+}
+
+@media (max-width: 720px) {
+    .summary-cards-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -963,26 +980,29 @@ else:
 main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
 with main_col:
-    def summary_card(label, value, card_class):
-        st.markdown(
-            f"""
+    def summary_card_html(label, value, card_class):
+        return f"""
             <div class="summary-card {card_class}">
                 <div class="summary-card-label">{label}</div>
                 <div class="summary-card-value">{value}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """
 
-    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-    with metric_col1:
-        summary_card("Saldo em Banco", format_currency(bank_balance), "summary-card-bank")
-    with metric_col2:
-        summary_card("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash")
-    with metric_col3:
-        summary_card("Entradas (Mês)", format_currency(total_income_month), "summary-card-income")
-    with metric_col4:
-        summary_card("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense")
+    summary_cards_html = "".join([
+        summary_card_html("Saldo em Banco", format_currency(bank_balance), "summary-card-bank"),
+        summary_card_html("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash"),
+        summary_card_html("Entradas (Mês)", format_currency(total_income_month), "summary-card-income"),
+        summary_card_html("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense"),
+    ])
+
+    st.markdown(
+        f"""
+        <div class="summary-cards-grid">
+            {summary_cards_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown("---")
 
