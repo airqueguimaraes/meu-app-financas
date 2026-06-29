@@ -208,23 +208,45 @@ section.main > div.block-container {
     margin: 0 0 0.95rem 0;
 }
 
+.credit-card-name-block,
 .credit-card-info {
     height: 28px !important;
     margin: 0 !important;
     padding: 0 !important;
-    color: rgba(255, 255, 255, 0.62) !important;
-    font-size: 0.64rem !important;
-    font-weight: 500 !important;
-    line-height: 1.08 !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
     transform: translateY(1px);
 }
 
+.credit-card-name-block div,
 .credit-card-info div {
     margin: 0 !important;
     padding: 0 !important;
+}
+
+.credit-card-name {
+    color: rgba(255, 255, 255, 0.88) !important;
+    font-size: 0.58rem !important;
+    font-weight: 800 !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+}
+
+.credit-card-limit {
+    color: rgba(255, 255, 255, 0.62) !important;
+    font-size: 0.56rem !important;
+    font-weight: 600 !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+}
+
+.credit-card-info {
+    color: rgba(255, 255, 255, 0.62) !important;
+    font-size: 0.56rem !important;
+    font-weight: 600 !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
 }
 
 .credit-card-gap {
@@ -579,13 +601,13 @@ def image_to_data_uri(image_path):
 
 def render_credit_cards_sidebar():
     credit_cards = [
-        {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
-        {"name": "Mercado Pago", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
-        {"name": "Inter", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
-        {"name": "Nu PJ", "logo": "nu-pj.png", "closing_date": "10", "due_date": "17"},
-        {"name": "PicPay", "logo": "picpay.webp", "closing_date": "02", "due_date": "10"},
-        {"name": "Amazon Prime", "logo": "prime.png", "closing_date": "25", "due_date": "10"},
-        {"name": "Mei Fácil", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
+        {"name": "Nubank", "limit": "R$1.600", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
+        {"name": "Mercado Pago", "limit": "R$13.200", "logo": "mercado-pago.png", "closing_date": "05", "due_date": "10"},
+        {"name": "Inter", "limit": "R$9.300", "logo": "inter.png", "closing_date": "06", "due_date": "12"},
+        {"name": "Nu PJ", "limit": "R$4.700", "logo": "nu-pj.png", "closing_date": "10", "due_date": "17"},
+        {"name": "PicPay", "limit": "R$2.040", "logo": "picpay.webp", "closing_date": "02", "due_date": "10"},
+        {"name": "Amazon Prime", "limit": "R$1.400", "logo": "prime.png", "closing_date": "25", "due_date": "10"},
+        {"name": "Mei", "limit": "R$950", "logo": "mei.webp", "closing_date": "07", "due_date": "13"},
     ]
 
     st.sidebar.markdown('<div class="credit-cards-spacer"></div>', unsafe_allow_html=True)
@@ -593,7 +615,7 @@ def render_credit_cards_sidebar():
     st.sidebar.markdown('<div class="credit-cards-line"></div>', unsafe_allow_html=True)
 
     for card in credit_cards:
-        logo_col, text_col = st.sidebar.columns([0.18, 0.82], gap="small", vertical_alignment="center")
+        logo_col, name_col, date_col = st.sidebar.columns([0.18, 0.35, 0.47], gap="small", vertical_alignment="center")
 
         with logo_col:
             if os.path.exists(card["logo"]):
@@ -605,7 +627,13 @@ def render_credit_cards_sidebar():
             else:
                 st.markdown(f'<div class="credit-card-logo-fallback">{card["name"][:2]}</div>', unsafe_allow_html=True)
 
-        with text_col:
+        with name_col:
+            st.markdown(
+                f'<div class="credit-card-name-block"><div class="credit-card-name">{card["name"]}</div><div class="credit-card-limit">{card["limit"]}</div></div>',
+                unsafe_allow_html=True
+            )
+
+        with date_col:
             st.markdown(
                 f'<div class="credit-card-info"><div>Fechamento: {card["closing_date"]}</div><div>Vencimento: {card["due_date"]}</div></div>',
                 unsafe_allow_html=True
