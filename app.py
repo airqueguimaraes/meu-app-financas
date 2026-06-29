@@ -99,6 +99,10 @@ def format_br_date(dt):
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
 
+# Helper sugerido pelo Claude para transformar float em fórmula locale-safe
+def num_formula(value: float) -> str:
+    return f"={value:.2f}"
+
 # --- PROCESSAMENTO DOS SALDOS ---
 st.sidebar.title("Calendário")
 current_date = datetime.now()
@@ -276,20 +280,14 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # 🌟 A MUDANÇA COERENTE COM LOCALIZAÇÃO BRASILEIRA:
-    # Convertemos o número para string com precisão de 2 casas décimais fixa (Ex: 45.50 -> "45,50")
-    # Forçamos a substituição do ponto por vírgula ANTES do envio. 
-    # Voltamos ao modo USER_ENTERED para o Google Sheets entender que isso é um número decimal no padrão PT-BR.
-    sheet_amount = f"{processed_amount:.2f}".replace(".", ",")
-    sheet_inst_val = f"{processed_inst_val:.2f}".replace(".", ",")
-    
+    # Monta a linha aplicando a fórmula locale-safe para os valores numéricos
     updated_row = [
         tx_type,
         tx_desc,
-        sheet_amount, 
+        num_formula(processed_amount),    # Envia "=45.50" 
         tx_method,
-        installments,
-        sheet_inst_val, 
+        installments,                     
+        num_formula(processed_inst_val),  # Envia "=22.75" se parcelado
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
