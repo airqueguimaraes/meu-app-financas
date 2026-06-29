@@ -99,10 +99,6 @@ def format_br_date(dt):
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
 
-# Helper sugerido pelo Claude para transformar float em fórmula locale-safe
-def num_formula(value: float) -> str:
-    return f"={value:.2f}"
-
 # --- PROCESSAMENTO DOS SALDOS ---
 st.sidebar.title("Calendário")
 current_date = datetime.now()
@@ -280,18 +276,20 @@ if submit_btn:
         
     processed_inst_val = processed_amount / installments if tx_method == "credito_parcelado" else processed_amount
     
-    # Monta a linha aplicando a fórmula locale-safe para os valores numéricos
+    # ─── SOLUÇÃO CLAUDE ADAPTADA SEM QUEBRAR A LEITURA ───
+    # Enviamos os números como FLOAT PUROS para evitar o bug do x10
+    # Usamos o modo RAW para que a API guarde o número exatamente como está
     updated_row = [
         tx_type,
         tx_desc,
-        num_formula(processed_amount),    # Envia "=45.50" 
+        processed_amount,                 # Float Puro 45.5
         tx_method,
-        installments,                     
-        num_formula(processed_inst_val),  # Envia "=22.75" se parcelado
+        int(installments),                
+        processed_inst_val,               # Float Puro
         card_brand,
         "TRUE" if is_for_someone else "FALSE",
         bought_by,
-        tx_date.strftime("%Y-%m-%d %H:%M:%S"),
+        tx_date.strftime("%Y-%m-%d %H:%M:%S"), # Texto de data padrão ISO
         tx_notes
     ]
     
@@ -300,12 +298,12 @@ if submit_btn:
             worksheet.update(
                 range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                 values=[updated_row],
-                value_input_option="USER_ENTERED"
+                value_input_option="RAW"
             )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
+            worksheet.append_row(updated_row, value_input_option="RAW")
             
         st.session_state.form_clear_trigger = True
         st.session_state.edit_values = {}
