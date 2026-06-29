@@ -7,6 +7,7 @@ import gspread
 import os
 import base64
 import mimetypes
+import html
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -391,6 +392,93 @@ div.stButton > button[kind="primary"] {
 @media (max-width: 560px) {
     .summary-cards-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+
+/* 9. Mini gráfico Top 10 gastos do mês */
+.top-expenses-chart {
+    width: 100%;
+    height: 116px;
+    padding: 0.45rem 0.65rem 0.35rem 0.65rem;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(38, 43, 53, 0.06);
+    box-shadow: 0 8px 22px rgba(38, 43, 53, 0.045);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+}
+
+.top-expenses-title {
+    color: rgba(47, 51, 65, 0.75);
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: 0 0 0.25rem 0;
+    white-space: nowrap;
+}
+
+.top-expenses-bars {
+    height: 82px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: clamp(0.22rem, 0.6vw, 0.5rem);
+}
+
+.top-expense-bar-slot {
+    height: 100%;
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    position: relative;
+}
+
+.top-expense-bar {
+    width: min(100%, 26px);
+    min-height: 7px;
+    border-radius: 7px 7px 2px 2px;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+    transition: height 0.25s ease;
+}
+
+.top-expense-bar-label {
+    color: rgba(47, 51, 65, 0.55);
+    font-size: 0.45rem;
+    font-weight: 600;
+    line-height: 1;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0.16rem;
+}
+
+.top-expense-bar-empty {
+    background: rgba(47, 51, 65, 0.08) !important;
+    box-shadow: none !important;
+}
+
+.top-expenses-chart-empty {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: rgba(47, 51, 65, 0.55);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+@media (max-width: 900px) {
+    .top-expenses-chart {
+        height: 104px;
+    }
+    .top-expenses-bars {
+        height: 72px;
     }
 }
 
@@ -897,7 +985,74 @@ def render_credit_cards_sidebar():
                 unsafe_allow_html=True
             )
 
+
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
+
+def build_top_expenses_chart_html(filtered_records):
+    expenses = []
+
+    for r in filtered_records:
+        if r.get("type") != "saida":
+            continue
+        if r.get("payment_method") == "saque_dinheiro":
+            continue
+
+        is_inst = r.get("is_installment_view", False)
+        desc = str(r.get("display_description", r.get("description", ""))) if is_inst else str(r.get("description", ""))
+        amount = r.get("display_amount", r.get("amount", 0)) if is_inst else r.get("amount", 0)
+
+        try:
+            amount_float = float(amount)
+        except Exception:
+            amount_float = 0.0
+
+        if amount_float <= 0:
+            continue
+
+        expenses.append({"description": desc or "Sem descrição", "amount": amount_float})
+
+    expenses = sorted(expenses, key=lambda item: item["amount"], reverse=True)[:10]
+
+    if not expenses:
+        return '<div class="top-expenses-chart top-expenses-chart-empty">Sem gastos no mês selecionado</div>'
+
+    max_amount = max(item["amount"] for item in expenses) or 1
+    colors = [
+        "#5b7cfa", "#a78bfa", "#f8b55f", "#ffd65c", "#f87171",
+        "#e879c6", "#5fd0c8", "#63c982", "#a3a328", "#9b9b00"
+    ]
+
+    bars_html = []
+    for idx in range(10):
+        if idx < len(expenses):
+            item = expenses[idx]
+            height = max(10, (item["amount"] / max_amount) * 100)
+            desc = html.escape(item["description"])
+            short_desc = html.escape(item["description"][:14])
+            value = html.escape(format_currency(item["amount"]))
+            color = colors[idx % len(colors)]
+            bars_html.append(
+                f'<div class="top-expense-bar-slot" title="{desc} • {value}">'
+                f'<div class="top-expense-bar" style="height:{height:.1f}%; background:{color};"></div>'
+                f'<div class="top-expense-bar-label">{idx + 1}</div>'
+                f'</div>'
+            )
+        else:
+            bars_html.append(
+                '<div class="top-expense-bar-slot">'
+                '<div class="top-expense-bar top-expense-bar-empty" style="height:10%;"></div>'
+                '<div class="top-expense-bar-label">-</div>'
+                '</div>'
+            )
+
+    return (
+        '<div class="top-expenses-chart">'
+        '<div class="top-expenses-title">Top 10 gastos do mês</div>'
+        '<div class="top-expenses-bars">'
+        + ''.join(bars_html) +
+        '</div>'
+        '</div>'
+    )
 
 records = load_data()
 render_transaction_animation()
@@ -965,17 +1120,21 @@ for r in records:
                 total_expense_month += inst_val
 
 # --- LAYOUT INTERFACE ---
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=240)
-    st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
-else:
-    st.title("Meu App Finanças")
-
 # Layout principal: área de resumo + nova transação à esquerda,
 # histórico do mês à direita.
 main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
 with main_col:
+    logo_col, chart_col = st.columns([0.34, 0.66], gap="large", vertical_alignment="center")
+    with logo_col:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=240)
+        else:
+            st.title("Meu App Finanças")
+    with chart_col:
+        st.markdown(build_top_expenses_chart_html(filtered_records), unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom: 1.35rem;'></div>", unsafe_allow_html=True)
     def summary_card_html(label, value, card_class):
         # HTML sem indentação inicial: evita que o Markdown do Streamlit trate como bloco de código.
         return (
