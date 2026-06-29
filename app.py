@@ -710,8 +710,6 @@ def load_data():
         st.error(f"Erro crítico no processamento dos dados: {e}")
         return []
 
-records = load_data()
-
 def format_currency(val):
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -719,6 +717,63 @@ def format_br_date(dt):
     dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
+
+def render_transaction_animation():
+    animation_emoji = st.session_state.get("screen_animation_emoji")
+    if not animation_emoji:
+        return
+
+    # Evita repetir a animação em próximos reruns.
+    del st.session_state.screen_animation_emoji
+
+    positions = [
+        (8, 18, 0.00), (18, 72, 0.18), (29, 34, 0.08), (41, 63, 0.24),
+        (53, 22, 0.12), (64, 78, 0.30), (76, 42, 0.04), (88, 68, 0.20),
+        (12, 52, 0.36), (34, 84, 0.16), (58, 50, 0.28), (82, 18, 0.10)
+    ]
+
+    emoji_spans = "".join(
+        f'<span style="left:{left}vw; top:{top}vh; animation-delay:{delay}s;">{animation_emoji}</span>'
+        for left, top, delay in positions
+    )
+
+    st.markdown(f'''
+    <style>
+    .transaction-emoji-overlay {{
+        position: fixed;
+        inset: 0;
+        z-index: 99999999;
+        pointer-events: none;
+        overflow: hidden;
+        animation: transactionOverlayFade 1.9s ease-out forwards;
+    }}
+
+    .transaction-emoji-overlay span {{
+        position: absolute;
+        font-size: 1.7rem;
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.65);
+        animation: transactionEmojiPop 1.45s ease-out forwards;
+        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.18));
+    }}
+
+    @keyframes transactionEmojiPop {{
+        0% {{ opacity: 0; transform: translate(-50%, -35%) scale(0.55) rotate(-8deg); }}
+        18% {{ opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(4deg); }}
+        58% {{ opacity: 1; transform: translate(-50%, -62%) scale(1.0) rotate(-3deg); }}
+        100% {{ opacity: 0; transform: translate(-50%, -92%) scale(0.8) rotate(8deg); }}
+    }}
+
+    @keyframes transactionOverlayFade {{
+        0% {{ opacity: 1; }}
+        78% {{ opacity: 1; }}
+        100% {{ opacity: 0; }}
+    }}
+    </style>
+    <div class="transaction-emoji-overlay">
+        {emoji_spans}
+    </div>
+    ''', unsafe_allow_html=True)
 
 def image_to_data_uri(image_path):
     mime_type, _ = mimetypes.guess_type(image_path)
@@ -769,6 +824,9 @@ def render_credit_cards_sidebar():
             )
 
         st.sidebar.markdown('<div class="credit-card-gap"></div>', unsafe_allow_html=True)
+
+records = load_data()
+render_transaction_animation()
 
 # --- PROCESSAMENTO DOS SALDOS ---
 st.sidebar.markdown('<h3 class="sidebar-section-title">Calendário</h3>', unsafe_allow_html=True)
@@ -974,6 +1032,8 @@ with main_col:
                 tx_notes
             ]
             
+            is_new_transaction = st.session_state.editing_index is None
+
             try:
                 if st.session_state.editing_index is not None:
                     worksheet.update(
@@ -986,6 +1046,9 @@ with main_col:
                 else:
                     worksheet.append_row(updated_row, value_input_option="RAW")
                     
+                if is_new_transaction:
+                    st.session_state.screen_animation_emoji = "🤑" if tx_type == "entrada" else "😔"
+
                 st.session_state.form_clear_trigger = True
                 st.session_state.edit_values = {}
                 st.cache_data.clear()
