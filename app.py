@@ -127,39 +127,39 @@ st.markdown("""
 
 /* 4.1 Área de Cartões de Crédito na Sidebar */
 .credit-cards-spacer {
-    height: 2.6rem;
+    height: 2.25rem;
 }
 
 .credit-cards-title {
     color: #ffffff !important;
-    font-size: 1.45rem !important;
+    font-size: 1.18rem !important;
     font-weight: 700 !important;
     line-height: 1.2 !important;
-    margin: 0 0 1rem 0 !important;
+    margin: 0 0 0.9rem 0 !important;
 }
 
 .credit-cards-line {
     width: 100%;
     height: 1px;
     background-color: rgba(255, 255, 255, 0.12);
-    margin: 0 0 1.5rem 0;
+    margin: 0 0 1.25rem 0;
 }
 
 .credit-card-date {
-    margin: 0.18rem 0 0.18rem 1.1rem !important;
-    color: rgba(255, 255, 255, 0.58) !important;
-    font-size: 1.02rem !important;
-    font-weight: 600 !important;
+    margin: 0.12rem 0 0.12rem 0.75rem !important;
+    color: rgba(255, 255, 255, 0.56) !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
     line-height: 1.28 !important;
 }
 
 .credit-card-gap {
-    height: 1.35rem;
+    height: 1.05rem;
 }
 
 [data-testid="stSidebar"] [data-testid="stImage"] {
-    margin-left: 1.1rem;
-    margin-bottom: 0.65rem;
+    margin-left: 0.75rem;
+    margin-bottom: 0.55rem;
 }
 
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
@@ -324,7 +324,7 @@ def render_credit_cards_sidebar():
 
     for card in credit_cards:
         if os.path.exists(card["logo"]):
-            st.sidebar.image(card["logo"], width=72)
+            st.sidebar.image(card["logo"], width=52)
         else:
             st.sidebar.markdown(f'**{card["name"]}**')
 
