@@ -1,0 +1,24 @@
+{
+  "name": "Meu App Finanças",
+  "short_name": "Finanças",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#328655",
+  "description": "Controle financeiro pessoal",
+  "icons": [
+    {
+      "src": "/app/static/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/app/static/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

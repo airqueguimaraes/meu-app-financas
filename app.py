@@ -802,6 +802,87 @@ div.stButton > button[kind="primary"] {
     }
 }
 
+
+/* 10. Página Instalar App */
+.install-app-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin: 1.15rem 0 1.25rem 0;
+}
+.install-step-card {
+    background: #ffffff;
+    border: 1px solid rgba(38, 43, 53, 0.08);
+    border-radius: 18px;
+    padding: 1rem;
+    box-shadow: 0 12px 26px rgba(38, 43, 53, 0.055);
+    min-height: 130px;
+}
+.install-step-number {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: rgba(50, 134, 85, 0.12);
+    color: #328655;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 900;
+    margin-bottom: 0.75rem;
+}
+.install-step-title {
+    color: #262b35;
+    font-size: 0.95rem;
+    font-weight: 850;
+    line-height: 1.15;
+    margin-bottom: 0.35rem;
+}
+.install-step-text {
+    color: #6b7280;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+.install-note-box {
+    background: #f4fbf7;
+    border: 1px solid rgba(56, 130, 83, 0.16);
+    border-radius: 16px;
+    padding: 1rem 1.1rem;
+    color: #384050;
+    font-size: 0.92rem;
+    line-height: 1.42;
+    margin: 1rem 0 1.25rem 0;
+}
+.install-mini-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin: 1rem 0 0 0;
+}
+.install-mini-card {
+    border-radius: 16px;
+    padding: 0.9rem 1rem;
+    background: #f8fafc;
+    border: 1px solid rgba(38, 43, 53, 0.08);
+    color: #384050;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+@media (max-width: 1100px) {
+    .install-app-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .install-mini-list {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 650px) {
+    .install-app-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -946,6 +1027,102 @@ components.html(
         observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
         window.parent.addEventListener('resize', updateLabel);
         window.setInterval(updateLabel, 350);
+    })();
+    </script>
+    """,
+    height=0,
+    width=0,
+)
+
+
+
+def get_query_param_value(name, default=""):
+    try:
+        value = st.query_params.get(name, default)
+        if isinstance(value, list):
+            return value[0] if value else default
+        return value if value is not None else default
+    except Exception:
+        try:
+            params = st.experimental_get_query_params()
+            values = params.get(name, [default])
+            return values[0] if values else default
+        except Exception:
+            return default
+
+def is_running_installed_webapp():
+    return str(get_query_param_value("installed_app", "")).lower() in ["1", "true", "yes"]
+
+# Metadados para deixar o app pronto para uso como Web App no iPhone.
+# O JavaScript também identifica quando o app já está aberto em modo instalado
+# e sinaliza isso para o Streamlit por query param, para ocultar a opção de instalação.
+components.html(
+    """
+    <script>
+    (function () {
+        function getParentWindow() {
+            try {
+                return window.parent || window;
+            } catch (e) {
+                return window;
+            }
+        }
+
+        function getParentDocument() {
+            try {
+                return window.parent && window.parent.document ? window.parent.document : document;
+            } catch (e) {
+                return document;
+            }
+        }
+
+        const parentWindow = getParentWindow();
+        const parentDocument = getParentDocument();
+        if (!parentDocument || !parentDocument.head) return;
+
+        function ensureMeta(name, content) {
+            let meta = parentDocument.querySelector('meta[name="' + name + '"]');
+            if (!meta) {
+                meta = parentDocument.createElement('meta');
+                meta.setAttribute('name', name);
+                parentDocument.head.appendChild(meta);
+            }
+            meta.setAttribute('content', content);
+        }
+
+        function ensureLink(rel, href) {
+            let link = parentDocument.querySelector('link[rel="' + rel + '"]');
+            if (!link) {
+                link = parentDocument.createElement('link');
+                link.setAttribute('rel', rel);
+                parentDocument.head.appendChild(link);
+            }
+            link.setAttribute('href', href);
+        }
+
+        ensureLink('manifest', '/app/static/manifest.webmanifest');
+        ensureLink('apple-touch-icon', '/app/static/apple-touch-icon.png');
+        ensureMeta('theme-color', '#328655');
+        ensureMeta('apple-mobile-web-app-capable', 'yes');
+        ensureMeta('apple-mobile-web-app-status-bar-style', 'default');
+        ensureMeta('apple-mobile-web-app-title', 'Meu App Finanças');
+        ensureMeta('mobile-web-app-capable', 'yes');
+
+        try {
+            const standaloneByMedia = parentWindow.matchMedia && parentWindow.matchMedia('(display-mode: standalone)').matches;
+            const standaloneByIos = parentWindow.navigator && parentWindow.navigator.standalone === true;
+            const isStandalone = Boolean(standaloneByMedia || standaloneByIos);
+            const url = new URL(parentWindow.location.href);
+            const current = url.searchParams.get('installed_app');
+
+            if (isStandalone && current !== '1') {
+                url.searchParams.set('installed_app', '1');
+                parentWindow.location.replace(url.toString());
+            } else if (!isStandalone && current === '1') {
+                url.searchParams.delete('installed_app');
+                parentWindow.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {}
     })();
     </script>
     """,
@@ -1920,6 +2097,47 @@ def render_import_csv_page(selected_month, selected_year, records):
             st.error(f"Erro ao importar transações: {err}")
 
 
+def render_install_app_page():
+    installed = is_running_installed_webapp()
+
+    st.markdown("# Instalar no iPhone")
+    st.markdown(
+        '<div class="page-kicker">Adicione o app à tela inicial para abrir como aplicativo, com ícone próprio e acesso mais rápido.</div>',
+        unsafe_allow_html=True
+    )
+
+    if installed:
+        st.success("Você já está usando o app em modo instalado. Por isso, esta opção fica oculta no menu lateral quando o app é aberto pela tela inicial.")
+        return
+
+    st.markdown(
+        '<div class="install-note-box">Para instalar, abra este app pelo Safari no iPhone. Depois siga os passos abaixo. O app continuará usando a versão hospedada no Streamlit e os dados seguirão sendo gravados no Google Sheets.</div>',
+        unsafe_allow_html=True
+    )
+
+    steps_html = (
+        '<div class="install-app-grid">'
+        '<div class="install-step-card"><div class="install-step-number">1</div><div class="install-step-title">Abra no Safari</div><div class="install-step-text">No iPhone, acesse o link do app usando o navegador Safari.</div></div>'
+        '<div class="install-step-card"><div class="install-step-number">2</div><div class="install-step-title">Toque em compartilhar</div><div class="install-step-text">Use o botão de compartilhamento do Safari, na barra inferior.</div></div>'
+        '<div class="install-step-card"><div class="install-step-number">3</div><div class="install-step-title">Adicionar à Tela de Início</div><div class="install-step-text">Escolha a opção para criar o atalho do app na tela inicial.</div></div>'
+        '<div class="install-step-card"><div class="install-step-number">4</div><div class="install-step-title">Confirme em Adicionar</div><div class="install-step-text">Depois disso, abra pelo novo ícone do Meu App Finanças.</div></div>'
+        '</div>'
+    )
+    st.markdown(steps_html, unsafe_allow_html=True)
+
+    st.markdown("### O que muda")
+    st.markdown(
+        '<div class="install-mini-list">'
+        '<div class="install-mini-card">✅ Ícone próprio na tela inicial</div>'
+        '<div class="install-mini-card">✅ Acesso mais rápido ao app</div>'
+        '<div class="install-mini-card">✅ Menu de instalação oculto depois de instalado</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.info("Depois de instalar, abra o app pelo ícone da tela inicial. Nessa condição, a opção de instalação será ocultada automaticamente da sidebar.")
+
+
 records = load_data()
 render_transaction_animation()
 
@@ -1928,6 +2146,12 @@ current_date = datetime.now()
 
 st.sidebar.markdown('<div class="sidebar-nav-title">Navegação</div>', unsafe_allow_html=True)
 nav_options = ["🏠 Home", "📌 Contas e assinaturas", "🏦 Trazer do banco"]
+if not is_running_installed_webapp():
+    nav_options.append("📱 Instalar app")
+
+if "sidebar_navigation" in st.session_state and st.session_state["sidebar_navigation"] not in nav_options:
+    st.session_state["sidebar_navigation"] = nav_options[0]
+
 selected_nav = st.sidebar.radio(
     "Navegação",
     nav_options,
@@ -1935,12 +2159,14 @@ selected_nav = st.sidebar.radio(
     key="sidebar_navigation",
     label_visibility="collapsed"
 )
-if selected_nav == nav_options[0]:
+if selected_nav == "🏠 Home":
     page_key = "home"
-elif selected_nav == nav_options[1]:
+elif selected_nav == "📌 Contas e assinaturas":
     page_key = "contas_assinaturas"
-else:
+elif selected_nav == "🏦 Trazer do banco":
     page_key = "importar_csv"
+else:
+    page_key = "instalar_app"
 
 with st.sidebar.expander("Calendário", expanded=True):
     selected_month = st.selectbox(
@@ -2349,5 +2575,7 @@ if page_key == "home":
 
 elif page_key == "contas_assinaturas":
     render_bills_page(selected_month, selected_year)
-else:
+elif page_key == "importar_csv":
     render_import_csv_page(selected_month, selected_year, records)
+else:
+    render_install_app_page()

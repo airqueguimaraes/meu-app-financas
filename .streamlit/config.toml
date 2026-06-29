@@ -1,2 +1,5 @@
-[theme]
-primaryColor="#318655"
+[server]
+enableStaticServing = true
+
+[browser]
+gatherUsageStats = false
