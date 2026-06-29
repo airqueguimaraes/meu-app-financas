@@ -166,7 +166,6 @@ for r in records:
 
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
-            # Para registros comuns, usamos o amount real na hora de ordenar
             r["order_amount"] = amount
             filtered_records.append(r)
             if r["type"] == "entrada":
@@ -185,7 +184,6 @@ for r in records:
                 inst_record["display_description"] = f"{r['description']} ({i}/{total_inst})"
                 inst_record["display_amount"] = inst_val
                 inst_record["is_installment_view"] = True
-                # Para parcelas, a ordenação visual por valor deve considerar o valor da parcela individual
                 inst_record["order_amount"] = inst_val
                 filtered_records.append(inst_record)
                 total_expense_month += inst_val
@@ -324,12 +322,12 @@ if submit_btn:
             worksheet.update(
                 range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}", 
                 values=[updated_row],
-                value_input_option="USER_ENTERED"
+                value_input_option="UNFORMATTED_VALUE"
             )
             st.session_state.editing_index = None
             st.session_state.edit_values = {}
         else:
-            worksheet.append_row(updated_row, value_input_option="USER_ENTERED")
+            worksheet.append_row(updated_row, value_input_option="UNFORMATTED_VALUE")
             
         st.session_state.form_clear_trigger = True
         st.session_state.edit_values = {}
@@ -344,13 +342,11 @@ st.header("Histórico do Mês Selecionado")
 if filtered_records:
     df_hist = pd.DataFrame(filtered_records)
     
-    # Adicionamos uma nova linha de colunas de controle para os Filtros e para a nova ORDENAÇÃO
     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
     f_type = f_col1.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"])
     f_card = f_col2.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""])
     f_buyer = f_col3.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""])
     
-    # 🌟 NOVA FUNCIONALIDADE: Caixa de seleção para ordenar a lista
     sort_option = f_col4.selectbox(
         "Ordenar por",
         options=[
@@ -359,10 +355,9 @@ if filtered_records:
             "Valor: do maior para o menor",
             "Valor: do menor para o maior"
         ],
-        index=0 # Padrão: Mais recente no topo
+        index=0
     )
     
-    # Executa os filtros primeiro
     if f_type != "Todos":
         df_hist = df_hist[df_hist["type"] == f_type]
     if f_card != "Todos":
@@ -370,7 +365,6 @@ if filtered_records:
     if f_buyer != "Todos":
         df_hist = df_hist[df_hist["bought_by"] == f_buyer]
         
-    # 🌟 NOVA FUNCIONALIDADE: Aplica as regras de ordenação baseadas na escolha do usuário
     if sort_option == "Data: mais recente no topo":
         df_hist = df_hist.sort_values(by="created_at", ascending=False)
     elif sort_option == "Data: mais antigo no topo":
@@ -395,39 +389,44 @@ if filtered_records:
         if row["bought_by"]:
             meta += f" | Compra de: {row['bought_by']}"
             
-        with st.container():
-            c_left, c_right, c_actions = st.columns([3.5, 1, 0.5])
+        # UI MODERNA: Transformando cada item em um "Card" fechado com borda
+        with st.container(border=True):
+            # ALINHAMENTO VERTICAL (Eixo Y): Centralizando o texto, o valor e os botões
+            c_left, c_right, c_actions = st.columns([3.5, 1.5, 0.8], vertical_alignment="center")
             
-            c_left.markdown(f"**{desc}**")
-            c_left.caption(meta)
-            
-            clean_notes = str(row["notes"]).strip()
-            clean_desc = str(row["description"]).strip()
-            if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
-                c_left.markdown(f"*{row['notes']}*")
+            with c_left:
+                st.markdown(f"**{desc}**")
+                st.caption(meta)
                 
-            c_right.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
+                clean_notes = str(row["notes"]).strip()
+                clean_desc = str(row["description"]).strip()
+                if clean_notes and clean_notes != "nan" and clean_notes != "" and clean_notes != clean_desc:
+                    st.markdown(f"*{row['notes']}*")
+                    
+            with c_right:
+                st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(float(val))}</span>", unsafe_allow_html=True)
             
             row_to_target = row["sheet_row_idx"]
             edit_key = f"edit_{row_to_target}_{idx}"
             del_key = f"del_{row_to_target}_{idx}"
             
             with c_actions:
+                # Alinha os dois botões lado a lado confortavelmente
                 sub_col1, sub_col2 = st.columns(2)
                 
-                if sub_col1.button("✏️", key=edit_key, help="Editar esta transação"):
-                    st.session_state.editing_index = row_to_target
-                    st.session_state.edit_values = row.copy()
-                    st.rerun()
-                    
-                if sub_col2.button("🗑️", key=del_key, help="Excluir permanentemente"):
-                    try:
-                        worksheet.delete_rows(row_to_target)
-                        st.cache_data.clear()
+                with sub_col1:
+                    if st.button("✏️", key=edit_key, help="Editar esta transação"):
+                        st.session_state.editing_index = row_to_target
+                        st.session_state.edit_values = row.copy()
                         st.rerun()
-                    except Exception as e:
-                        pass
                         
-            st.markdown("<hr style='margin:0.5em 0px; opacity:0.2;'>", unsafe_allow_html=True)
+                with sub_col2:
+                    if st.button("🗑️", key=del_key, help="Excluir permanentemente"):
+                        try:
+                            worksheet.delete_rows(row_to_target)
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            pass
 else:
     st.info("Nenhuma transação registrada para o período selecionado.")
