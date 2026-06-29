@@ -994,6 +994,67 @@ body,
     }
 }
 
+
+/* 12. Correção agressiva do botão de abrir menu no mobile/iOS
+   O Streamlit/iOS pode aplicar opacidade no botão recolhido; aqui forçamos
+   o controle, seus ancestrais diretos e o SVG a ficarem 100% visíveis. */
+@media (max-width: 768px) {
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"] *,
+    [data-testid="stSidebarCollapsedControl"] * {
+        opacity: 1 !important;
+        visibility: visible !important;
+        filter: none !important;
+        color: #388253 !important;
+        -webkit-text-fill-color: #388253 !important;
+    }
+
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"] {
+        z-index: 9999999 !important;
+        background: transparent !important;
+        mix-blend-mode: normal !important;
+        pointer-events: auto !important;
+    }
+
+    [data-testid="collapsedControl"] button,
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="collapsedControl"] [role="button"],
+    [data-testid="stSidebarCollapsedControl"] [role="button"] {
+        opacity: 1 !important;
+        visibility: visible !important;
+        background: transparent !important;
+        color: #388253 !important;
+        -webkit-text-fill-color: #388253 !important;
+        filter: none !important;
+        mix-blend-mode: normal !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="collapsedControl"] svg,
+    [data-testid="collapsedControl"] svg *,
+    [data-testid="collapsedControl"] svg path,
+    [data-testid="stSidebarCollapsedControl"] svg,
+    [data-testid="stSidebarCollapsedControl"] svg *,
+    [data-testid="stSidebarCollapsedControl"] svg path,
+    button[aria-label*="sidebar" i] svg,
+    button[aria-label*="sidebar" i] svg *,
+    button[aria-label*="sidebar" i] svg path,
+    button[title*="sidebar" i] svg,
+    button[title*="sidebar" i] svg *,
+    button[title*="sidebar" i] svg path {
+        opacity: 1 !important;
+        visibility: visible !important;
+        color: #388253 !important;
+        fill: #388253 !important;
+        stroke: #388253 !important;
+        -webkit-text-fill-color: #388253 !important;
+        filter: none !important;
+        mix-blend-mode: normal !important;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1088,17 +1149,35 @@ components.html(
         function paintCollapsedButton(btn) {
             if (!btn) return;
 
+            // No iOS o Streamlit pode deixar o ícone translúcido aplicando
+            // opacity/filter no próprio botão ou em wrappers acima dele.
+            // Por isso pintamos o botão e também alguns ancestrais diretos.
+            let node = btn;
+            for (let i = 0; i < 6 && node; i++) {
+                node.style.opacity = '1';
+                node.style.visibility = 'visible';
+                node.style.filter = 'none';
+                node.style.mixBlendMode = 'normal';
+                node = node.parentElement;
+            }
+
             btn.style.color = '#388253';
             btn.style.background = 'transparent';
             btn.style.boxShadow = 'none';
             btn.style.overflow = 'visible';
+            btn.style.opacity = '1';
+            btn.style.visibility = 'visible';
+            btn.style.filter = 'none';
+            btn.style.mixBlendMode = 'normal';
 
-            btn.querySelectorAll('svg, svg *').forEach((el) => {
+            btn.querySelectorAll('svg, svg *, path').forEach((el) => {
                 el.style.color = '#388253';
                 el.style.fill = '#388253';
                 el.style.stroke = '#388253';
                 el.style.opacity = '1';
+                el.style.visibility = 'visible';
                 el.style.filter = 'none';
+                el.style.mixBlendMode = 'normal';
             });
         }
 
