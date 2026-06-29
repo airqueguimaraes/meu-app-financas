@@ -57,7 +57,6 @@ def safe_float(val):
     try:
         return float(val)
     except (ValueError, TypeError):
-        # Fallback caso ainda exista alguma string formatada legada nas células antigas
         try:
             val_str = str(val).strip().replace(".", "").replace(",", ".")
             return float(val_str)
@@ -68,7 +67,6 @@ def safe_float(val):
 @st.cache_data(ttl=5)
 def load_data():
     try:
-        # Puxa os dados puros (floats legítimos do Python) conforme a sugestão matadora do Claude
         data = worksheet.get_all_records(value_render_option='UNFORMATTED_VALUE')
         if not data:
             return []
@@ -76,9 +74,19 @@ def load_data():
         expanded = []
         for idx, r in enumerate(data, start=2):
             r["sheet_row_idx"] = idx
-            # Garante a conversão direta e sem risco de crash no loop
             r["amount"] = safe_float(r.get("amount", 0.0))
             r["installment_value"] = safe_float(r.get("installment_value", 0.0))
+            
+            # CORREÇÃO CRÍTICA DE DATA: Converte com suporte a múltiplos formatos textuais do Sheets
+            raw_date = r.get("created_at", "")
+            try:
+                r["created_at"] = pd.to_datetime(raw_date)
+            except Exception:
+                try:
+                    r["created_at"] = pd.to_datetime(raw_date, format="%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    r["created_at"] = pd.to_datetime(datetime.now())
+                    
             expanded.append(r)
             
         df = pd.DataFrame(expanded)
@@ -87,7 +95,6 @@ def load_data():
             if col not in df.columns:
                 df[col] = ""
         df = df[cols]
-        df["created_at"] = pd.to_datetime(df["created_at"])
         return df.to_dict(orient="records")
     except Exception as e:
         return []
