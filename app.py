@@ -47,15 +47,20 @@ section.main > div.block-container {
     color: #ffffff !important;
 }
 
-/* 3.1 Título principal do menu lateral */
+/* 3.1 Ajusta o respiro superior da sidebar */
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+    padding-top: 0.85rem !important;
+}
+
+/* 3.2 Título principal do menu lateral */
 .sidebar-menu-main-title {
     color: #328655 !important;
     font-family: inherit !important;
-    font-size: 2.55rem !important;
+    font-size: 2.45rem !important;
     font-weight: 500 !important;
     line-height: 1 !important;
     text-align: center !important;
-    margin: 0.2rem 0 3.9rem 0 !important;
+    margin: 0 0 1.45rem 0 !important;
     padding: 0 !important;
     letter-spacing: -0.02em !important;
 }
