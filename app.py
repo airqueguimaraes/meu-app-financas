@@ -210,7 +210,7 @@ section.main > div.block-container {
 
 .credit-card-name-block,
 .credit-card-info {
-    height: 28px !important;
+    height: 34px !important;
     margin: 0 !important;
     padding: 0 !important;
     display: flex !important;
@@ -227,53 +227,53 @@ section.main > div.block-container {
 
 .credit-card-name {
     color: rgba(255, 255, 255, 0.88) !important;
-    font-size: 0.58rem !important;
+    font-size: 0.68rem !important;
     font-weight: 800 !important;
-    line-height: 1.04 !important;
+    line-height: 1.06 !important;
     white-space: nowrap !important;
 }
 
 .credit-card-limit {
     color: rgba(255, 255, 255, 0.62) !important;
-    font-size: 0.56rem !important;
+    font-size: 0.65rem !important;
     font-weight: 600 !important;
-    line-height: 1.04 !important;
+    line-height: 1.06 !important;
     white-space: nowrap !important;
 }
 
 .credit-card-info {
     color: rgba(255, 255, 255, 0.62) !important;
-    font-size: 0.56rem !important;
+    font-size: 0.65rem !important;
     font-weight: 600 !important;
-    line-height: 1.04 !important;
+    line-height: 1.06 !important;
     white-space: nowrap !important;
 }
 
 .credit-card-gap {
-    height: 0.7rem;
+    height: 0.85rem;
 }
 
 
 .credit-card-logo-img {
-    width: 28px !important;
-    height: 28px !important;
+    width: 34px !important;
+    height: 34px !important;
     object-fit: contain !important;
-    border-radius: 4px !important;
+    border-radius: 5px !important;
     display: block !important;
     transform: none !important;
 }
 
 .credit-card-logo-fallback {
     transform: none !important;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
+    width: 34px;
+    height: 34px;
+    border-radius: 5px;
     background-color: rgba(255, 255, 255, 0.14);
     color: #ffffff !important;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.58rem;
+    font-size: 0.68rem;
     font-weight: 700;
 }
 
@@ -287,7 +287,7 @@ section.main > div.block-container {
     width: 28px !important;
     max-width: 28px !important;
     height: auto !important;
-    border-radius: 4px !important;
+    border-radius: 5px !important;
 }
 
 [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] {
