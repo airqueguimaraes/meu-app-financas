@@ -320,6 +320,67 @@ div.stButton > button[kind="primary"] {
     color: white !important;
     border: none !important;
 }
+
+
+/* 8. Cards de resumo financeiro */
+.summary-card {
+    border-radius: 22px;
+    padding: 1.15rem 1.25rem 1.2rem 1.25rem;
+    min-height: 118px;
+    border: 1px solid rgba(38, 43, 53, 0.06);
+    box-shadow: 0 10px 24px rgba(38, 43, 53, 0.055);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.summary-card-bank {
+    background: #f3f4f6;
+}
+
+.summary-card-cash {
+    background: #fbf0dc;
+}
+
+.summary-card-income {
+    background: #e7f4ed;
+}
+
+.summary-card-expense {
+    background: #fde7e7;
+}
+
+.summary-card-label {
+    color: #2f3341;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.15;
+    margin-bottom: 0.55rem;
+    white-space: nowrap;
+}
+
+.summary-card-value {
+    color: #2f3341;
+    font-size: clamp(1.55rem, 2.1vw, 2.35rem);
+    font-weight: 500;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+    .summary-card {
+        padding: 1rem;
+        min-height: 104px;
+    }
+    .summary-card-label {
+        font-size: 0.82rem;
+    }
+    .summary-card-value {
+        font-size: 1.55rem;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -902,11 +963,26 @@ else:
 main_col, history_col = st.columns([0.68, 0.32], gap="large")
 
 with main_col:
+    def summary_card(label, value, card_class):
+        st.markdown(
+            f"""
+            <div class="summary-card {card_class}">
+                <div class="summary-card-label">{label}</div>
+                <div class="summary-card-value">{value}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-    metric_col1.metric("Saldo em Banco", format_currency(bank_balance))
-    metric_col2.metric("Dinheiro Vivo", format_currency(cash_balance))
-    metric_col3.metric("Entradas (Mês)", format_currency(total_income_month))
-    metric_col4.metric("Saídas (Mês)", format_currency(total_expense_month))
+    with metric_col1:
+        summary_card("Saldo em Banco", format_currency(bank_balance), "summary-card-bank")
+    with metric_col2:
+        summary_card("Dinheiro Vivo", format_currency(cash_balance), "summary-card-cash")
+    with metric_col3:
+        summary_card("Entradas (Mês)", format_currency(total_income_month), "summary-card-income")
+    with metric_col4:
+        summary_card("Saídas (Mês)", format_currency(total_expense_month), "summary-card-expense")
 
     st.markdown("---")
 
