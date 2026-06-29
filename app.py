@@ -139,7 +139,7 @@ st.markdown("---")
 
 st.header("Nova Transação")
 
-# SOLUÇÃO DO BUG: Tiramos a seleção de Tipo/Método de travas estáticas e usamos reatividade controlada
+# SEÇÃO DE CONTROLE REATIVO (Fora do form para atualizar na hora)
 t_col1, t_col2 = st.columns(2)
 tx_type = t_col1.selectbox("Tipo", ["entrada", "saida"])
 
@@ -154,35 +154,37 @@ else:
     
 tx_method = t_col2.selectbox("Método", options=list(method_opts.keys()), format_func=lambda x: method_opts[x])
 
-# O restante dos campos textuais continuam envelopados no formulário para performance de envio
+# Inicialização de variáveis que dependem das caixas de seleção reativas
+installments = 1
+card_brand = ""
+is_for_someone = False
+bought_by = ""
+tx_date = datetime.now()
+
+# CORREÇÃO 1 & 2: Controles do Crédito Parcelado reativos na tela principal
+if tx_method == "credito_parcelado" and tx_type == "saida":
+    st.markdown("##### 💳 Detalhes do Parcelamento")
+    c_col1, c_col2 = st.columns(2)
+    # Mudado min_value para 1 para permitir crédito à vista
+    installments = c_col1.number_input("Parcelas", min_value=1, max_value=48, value=1)
+    card_brand = c_col2.selectbox("Cartão", ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"])
+    
+    is_for_someone = st.checkbox("Compra de alguém")
+    if is_for_someone:
+        bought_by = st.text_input("Quem comprou?", placeholder="Ex: Nome da pessoa")
+
+# CORREÇÃO 3: Controle da data customizada reativo na tela principal
+use_custom_date = st.checkbox("Usar data diferente de hoje")
+if use_custom_date:
+    custom_d = st.date_input("Data da transação", datetime.now().date())
+    tx_date = datetime.combine(custom_d, datetime.now().time())
+
+# FORMULÁRIO TEXTUAL DE ENVIO (Para performance)
 with st.form("transaction_form", clear_on_submit=True):
     d_col1, d_col2 = st.columns(2)
-    tx_desc = d_col1.text_input("Descrição", placeholder="Ex: Salário")
-    tx_amount = d_col2.number_input("Valor (R$)", min_value=0.01, step=0.01, format="%.2f")
-    
-    installments = 1
-    card_brand = ""
-    is_for_someone = False
-    bought_by = ""
-    
-    # INTELIGÊNCIA UX: Campos de cartão só aparecem se o método for 'Crédito Parcelado'
-    if tx_method == "credito_parcelado" and tx_type == "saida":
-        st.markdown("##### 💳 Detalhes do Parcelamento")
-        c_col1, c_col2 = st.columns(2)
-        installments = c_col1.number_input("Parcelas", min_value=2, max_value=48, value=2)
-        card_brand = c_col2.selectbox("Cartão", ["Inter", "Mercado Pago", "Nubank", "Nu PJ", "PicPay", "Amazon", "Mei PJ"])
-        
-        is_for_someone = st.checkbox("Compra de alguém")
-        if is_for_someone:
-            bought_by = st.text_input("Quem comprou?", placeholder="Ex: João")
-            
-    use_custom_date = st.checkbox("Usar data diferente de hoje")
-    tx_date = datetime.now()
-    if use_custom_date:
-        tx_date = st.date_input("Data da transação", datetime.now())
-        tx_date = datetime.combine(tx_date, datetime.now().time())
-        
-    tx_notes = st.text_area("Comentários ou observações", placeholder="Ex: Observações sobre esta transação")
+    tx_desc = d_col1.text_input("Descrição", placeholder="Ex: Mercado")
+    tx_amount = d_col2.number_input("Valor Total (R$)", min_value=0.01, step=0.01, format="%.2f")
+    tx_notes = st.text_area("Comentários ou observações", placeholder="Ex: Detalhes da compra...")
     
     submit_btn = st.form_submit_button("Adicionar Transação")
     
