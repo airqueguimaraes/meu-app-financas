@@ -5,6 +5,8 @@ from datetime import datetime
 import dateutil.relativedelta
 import gspread
 import os
+import base64
+import mimetypes
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="expanded")
@@ -227,6 +229,16 @@ section.main > div.block-container {
 
 .credit-card-gap {
     height: 0.7rem;
+}
+
+
+.credit-card-logo-img {
+    width: 28px !important;
+    height: 28px !important;
+    object-fit: contain !important;
+    border-radius: 4px !important;
+    display: block !important;
+    transform: translateY(3px) !important;
 }
 
 .credit-card-logo-fallback {
@@ -556,6 +568,14 @@ def format_br_date(dt):
     dia_semana = dias[dt.weekday()]
     return f"{dia_semana}, {dt.strftime('%d/%m/%Y')}"
 
+def image_to_data_uri(image_path):
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if mime_type is None:
+        mime_type = "image/png"
+    with open(image_path, "rb") as img_file:
+        encoded = base64.b64encode(img_file.read()).decode("utf-8")
+    return f"data:{mime_type};base64,{encoded}"
+
 def render_credit_cards_sidebar():
     credit_cards = [
         {"name": "Nubank", "logo": "nubank.png", "closing_date": "02", "due_date": "09"},
@@ -576,7 +596,11 @@ def render_credit_cards_sidebar():
 
         with logo_col:
             if os.path.exists(card["logo"]):
-                st.image(card["logo"], width=28)
+                logo_uri = image_to_data_uri(card["logo"])
+                st.markdown(
+                    f'<img class="credit-card-logo-img" src="{logo_uri}" alt="{card["name"]}">',
+                    unsafe_allow_html=True
+                )
             else:
                 st.markdown(f'<div class="credit-card-logo-fallback">{card["name"][:2]}</div>', unsafe_allow_html=True)
 
