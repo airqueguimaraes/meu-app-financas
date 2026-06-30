@@ -2322,7 +2322,7 @@ def format_payment_method_label(payment_method):
 TRANSACTION_HEADERS = [
     "type", "description", "amount", "payment_method", "installments", "installment_value",
     "card", "is_for_someone", "bought_by", "created_at", "notes",
-    "category", "subcategory", "tags"
+    "category", "subcategory", "tags", "impact_current_balance", "historical_only"
 ]
 
 CATEGORY_LIBRARY = {
@@ -2616,6 +2616,8 @@ def load_data():
             "category": headers.index("category") if "category" in headers else 11,
             "subcategory": headers.index("subcategory") if "subcategory" in headers else 12,
             "tags": headers.index("tags") if "tags" in headers else 13,
+            "impact_current_balance": headers.index("impact_current_balance") if "impact_current_balance" in headers else None,
+            "historical_only": headers.index("historical_only") if "historical_only" in headers else None,
         }
 
         for idx, row in enumerate(raw_rows[1:], start=2):
@@ -2637,6 +2639,8 @@ def load_data():
                 "category": clean_text(row[field_map["category"]]) if field_map["category"] < len(row) else "",
                 "subcategory": clean_text(row[field_map["subcategory"]]) if field_map["subcategory"] < len(row) else "",
                 "tags": clean_text(row[field_map["tags"]]) if field_map["tags"] < len(row) else "",
+                "impact_current_balance": clean_text(row[field_map["impact_current_balance"]]) if field_map["impact_current_balance"] is not None and field_map["impact_current_balance"] < len(row) else "TRUE",
+                "historical_only": clean_text(row[field_map["historical_only"]]) if field_map["historical_only"] is not None and field_map["historical_only"] < len(row) else "FALSE",
             }
             
             raw_date = clean_text(row[field_map["created_at"]])
@@ -2859,6 +2863,94 @@ def build_top_expenses_chart_html(filtered_records):
         '</div>'
     )
 
+
+APP_CONFIG_SHEET_NAME = "app_config"
+APP_CONFIG_HEADERS = ["key", "value", "updated_at"]
+
+def default_app_start_date():
+    today = datetime.now().date()
+    return today.replace(day=1)
+
+def get_or_create_app_config_worksheet():
+    try:
+        config_ws = google_sheets_retry(sh.worksheet, APP_CONFIG_SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        config_ws = google_sheets_retry(sh.add_worksheet, title=APP_CONFIG_SHEET_NAME, rows=50, cols=len(APP_CONFIG_HEADERS))
+        google_sheets_retry(config_ws.append_row, APP_CONFIG_HEADERS, value_input_option="RAW")
+    try:
+        values = google_sheets_retry(config_ws.get_all_values)
+        if not values:
+            google_sheets_retry(config_ws.append_row, APP_CONFIG_HEADERS, value_input_option="RAW")
+        elif [clean_text(h) for h in values[0]] != APP_CONFIG_HEADERS:
+            google_sheets_retry(config_ws.update, range_name="A1:C1", values=[APP_CONFIG_HEADERS], value_input_option="RAW")
+    except Exception:
+        pass
+    return config_ws
+
+@st.cache_data(ttl=5)
+def load_app_config():
+    defaults = {
+        "app_start_date": default_app_start_date().strftime("%Y-%m-%d"),
+        "initial_bank_balance": "0",
+        "initial_cash_balance": "0",
+    }
+    try:
+        config_ws = get_or_create_app_config_worksheet()
+        rows = google_sheets_retry(config_ws.get_all_records)
+        config = defaults.copy()
+        for row in rows:
+            key = clean_text(row.get("key", ""))
+            value = clean_text(row.get("value", ""))
+            if key:
+                config[key] = value
+        return config
+    except Exception:
+        return defaults
+
+def parse_app_config_date(value):
+    try:
+        parsed = pd.to_datetime(value, dayfirst=False, errors="raise").date()
+    except Exception:
+        parsed = default_app_start_date()
+    return parsed
+
+def save_app_config(updates):
+    config_ws = get_or_create_app_config_worksheet()
+    values = google_sheets_retry(config_ws.get_all_values)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    key_to_row = {}
+    for idx, row in enumerate(values[1:], start=2):
+        if row:
+            key_to_row[clean_text(row[0])] = idx
+    for key, value in updates.items():
+        value = clean_text(value)
+        if key in key_to_row:
+            row_idx = key_to_row[key]
+            google_sheets_retry(config_ws.update, range_name=f"A{row_idx}:C{row_idx}", values=[[key, value, now]], value_input_option="RAW")
+        else:
+            google_sheets_retry(config_ws.append_row, [key, value, now], value_input_option="RAW")
+    st.cache_data.clear()
+
+def is_historical_record(record):
+    return is_true_value(record.get("historical_only", "FALSE"))
+
+def should_record_impact_current_balance(record, app_start_date):
+    if is_historical_record(record):
+        return False
+    if not is_true_value(record.get("impact_current_balance", "TRUE")):
+        return False
+    try:
+        return record["created_at"].date() >= app_start_date
+    except Exception:
+        return False
+
+def should_record_appear_in_home(record, app_start_date):
+    if is_historical_record(record):
+        return False
+    try:
+        return record["created_at"].date() >= app_start_date
+    except Exception:
+        return False
 
 BILLS_SHEET_NAME = "contas_assinaturas"
 BILLS_HEADERS = ["name", "category", "amount", "due_day", "payment_method", "notes", "active", "created_at"]
@@ -3314,6 +3406,13 @@ def render_import_csv_page(selected_month, selected_year, records):
             "Origem",
             ["Nubank", "Nu PJ", "Inter", "Mercado Pago", "PicPay", "Amazon Prime", "Mei Fácil", "Outro"],
         )
+        import_as_historical = st.checkbox(
+            "Importar como histórico antigo",
+            value=False,
+            help="Use para meses anteriores à data em que você começou a usar o app. Esses dados serão guardados para relatórios futuros, mas não alteram saldo atual nem a Home."
+        )
+        if import_as_historical:
+            st.info("Histórico antigo: essas linhas serão salvas, mas não entram no saldo atual nem nos cards da Home. Elas ficam disponíveis para relatórios futuros.")
 
     with help_col:
         st.subheader("Como funciona")
@@ -3509,8 +3608,11 @@ def render_import_csv_page(selected_month, selected_year, records):
             installment_value = amount
             notes = (
                 f"Importado via CSV | Origem: {source} | Arquivo: {uploaded_file.name} | "
-                f"Lote: {batch_id} | Importado em: {imported_at} | ID: {row['import_id']}"
+                f"Lote: {batch_id} | Importado em: {imported_at} | ID: {row['import_id']} | "
+                f"Histórico antigo: {'TRUE' if import_as_historical else 'FALSE'}"
             )
+            impact_current_balance = "FALSE" if import_as_historical else "TRUE"
+            historical_only = "TRUE" if import_as_historical else "FALSE"
 
             rows_for_sheet.append([
                 tx_type,
@@ -3527,6 +3629,8 @@ def render_import_csv_page(selected_month, selected_year, records):
                 normalize_category_for_save(row.get("Categoria", "")),
                 normalize_subcategory_for_save(row.get("Subcategoria", "")),
                 clean_text(row.get("Tags", "")),
+                impact_current_balance,
+                historical_only,
             ])
 
             if position == total_to_import or position % max(1, total_to_import // 10) == 0:
@@ -3592,6 +3696,10 @@ def render_install_app_page():
 
 
 records = load_data()
+app_config = load_app_config()
+app_start_date = parse_app_config_date(app_config.get("app_start_date", ""))
+initial_bank_balance = safe_float(app_config.get("initial_bank_balance", 0))
+initial_cash_balance = safe_float(app_config.get("initial_cash_balance", 0))
 render_transaction_animation()
 
 # --- PROCESSAMENTO DOS SALDOS ---
@@ -3630,11 +3738,38 @@ with st.sidebar.expander("Calendário", expanded=True):
     )
     selected_year = st.selectbox("Ano", options=list(range(current_date.year - 5, current_date.year + 6)), index=5)
 
+with st.sidebar.expander("Configuração inicial", expanded=False):
+    st.caption("Defina a data em que você começou a usar o app e os saldos reais daquele dia. Transações anteriores não alteram o saldo atual.")
+    start_date_input = st.date_input(
+        "Comecei a usar o app no dia:",
+        value=app_start_date,
+        format="DD/MM/YYYY",
+        key="config_app_start_date"
+    )
+    initial_bank_input = st.text_input(
+        "Saldo inicial em banco (R$)",
+        value=format_currency(initial_bank_balance).replace("R$ ", ""),
+        key="config_initial_bank"
+    )
+    initial_cash_input = st.text_input(
+        "Dinheiro vivo inicial (R$)",
+        value=format_currency(initial_cash_balance).replace("R$ ", ""),
+        key="config_initial_cash"
+    )
+    if st.button("Salvar configuração inicial", type="primary", key="save_initial_config"):
+        save_app_config({
+            "app_start_date": start_date_input.strftime("%Y-%m-%d"),
+            "initial_bank_balance": str(parse_import_amount(initial_bank_input)),
+            "initial_cash_balance": str(parse_import_amount(initial_cash_input)),
+        })
+        st.success("Configuração inicial salva.")
+        st.rerun()
+
 with st.sidebar.expander("Cartões de crédito", expanded=True):
     render_credit_cards_sidebar()
 
-bank_balance = 0.0
-cash_balance = 0.0
+bank_balance = initial_bank_balance
+cash_balance = initial_cash_balance
 total_income_month = 0.0
 total_expense_month = 0.0
 filtered_records = []
@@ -3645,27 +3780,33 @@ for r in records:
     inst_val = r["installment_value"]
     
     is_change_adjustment = is_cash_change_adjustment(r)
+    affects_current_balance = should_record_impact_current_balance(r, app_start_date)
+    appears_in_home = should_record_appear_in_home(r, app_start_date)
 
-    if r["type"] == "entrada":
-        if r["payment_method"] == "pix_conta":
-            bank_balance += amount
-        elif r["payment_method"] == "dinheiro_vivo" and not is_change_adjustment:
-            cash_balance += amount
-        elif r["payment_method"] == "troco_dinheiro":
-            # Troco/ajuste não é dinheiro novo: ele já fazia parte do valor sacado.
-            pass
-    else:
-        if r["payment_method"] == "saque_dinheiro":
-            bank_balance -= amount
-            cash_balance += amount
-        elif r["payment_method"] == "dinheiro_vivo":
-            cash_balance -= amount
-        elif r["payment_method"] == "credito_parcelado":
-            # Compra no crédito parcelado não muda o saldo em banco no ato da compra.
-            # Ela entra apenas como saída mensal, parcela por parcela, no mês correto.
-            pass
+    # Saldo atual: parte dos saldos iniciais e só considera transações a partir da data de início.
+    # Importações marcadas como histórico antigo ficam guardadas para relatórios futuros, mas não mexem no saldo.
+    if affects_current_balance:
+        if r["type"] == "entrada":
+            if r["payment_method"] == "pix_conta":
+                bank_balance += amount
+            elif r["payment_method"] == "dinheiro_vivo" and not is_change_adjustment:
+                cash_balance += amount
+            elif r["payment_method"] == "troco_dinheiro":
+                pass
         else:
-            bank_balance -= amount
+            if r["payment_method"] == "saque_dinheiro":
+                bank_balance -= amount
+                cash_balance += amount
+            elif r["payment_method"] == "dinheiro_vivo":
+                cash_balance -= amount
+            elif r["payment_method"] == "credito_parcelado":
+                pass
+            else:
+                bank_balance -= amount
+
+    # Home e dashboards mensais: não exibem histórico antigo nem transações anteriores à data de início.
+    if not appears_in_home:
+        continue
 
     if r["payment_method"] != "credito_parcelado":
         if r_date.month == selected_month and r_date.year == selected_year:
@@ -3897,7 +4038,9 @@ if page_key == "home":
                     tx_notes,
                     normalize_category_for_save(tx_category),
                     normalize_subcategory_for_save(tx_subcategory),
-                    clean_text(tx_tags)
+                    clean_text(tx_tags),
+                    clean_text(st.session_state.edit_values.get("impact_current_balance", "TRUE")) or "TRUE",
+                    clean_text(st.session_state.edit_values.get("historical_only", "FALSE")) or "FALSE"
                 ]
             
                 is_new_transaction = st.session_state.editing_index is None
@@ -3906,7 +4049,7 @@ if page_key == "home":
                     if st.session_state.editing_index is not None:
                         google_sheets_retry(
                             worksheet.update,
-                            range_name=f"A{st.session_state.editing_index}:N{st.session_state.editing_index}",
+                            range_name=f"A{st.session_state.editing_index}:P{st.session_state.editing_index}",
                             values=[updated_row],
                             value_input_option="RAW"
                         )
