@@ -189,7 +189,40 @@ def render_password_gate():
                 border-color: rgba(255, 255, 255, 0.16) !important;
             }
         }
-        </style>
+        
+.tx-category-line {
+    margin: 0.45rem 0 0.35rem 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.tx-category-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(56, 130, 83, 0.12);
+    color: #2f6f47;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+.tx-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(47, 51, 66, 0.08);
+    color: #6b7280;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+    .tx-category-pill { background: rgba(56, 130, 83, 0.26); color: #d6f5df; }
+    .tx-tag { background: rgba(255,255,255,0.10); color: #d7dbe3; }
+}
+</style>
         """,
         unsafe_allow_html=True,
     )
@@ -1334,6 +1367,41 @@ body,
     }
 }
 
+
+/* Categoria, subcategoria e tags nas transações */
+.tx-category-line {
+    margin: 0.45rem 0 0.35rem 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.tx-category-pill {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(56, 130, 83, 0.12);
+    color: #2f6f47;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+.tx-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(47, 51, 66, 0.08);
+    color: #6b7280;
+    font-size: 0.74rem;
+    font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+    .tx-category-pill { background: rgba(56, 130, 83, 0.26) !important; color: #d6f5df !important; }
+    .tx-tag { background: rgba(255,255,255,0.10) !important; color: #d7dbe3 !important; }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -2218,6 +2286,258 @@ def format_payment_method_label(payment_method):
     cleaned = clean_text(payment_method)
     return labels.get(cleaned, cleaned.replace("_", " ").title())
 
+# --- Categorias, subcategorias e tags ---
+TRANSACTION_HEADERS = [
+    "type", "description", "amount", "payment_method", "installments", "installment_value",
+    "card", "is_for_someone", "bought_by", "created_at", "notes",
+    "category", "subcategory", "tags"
+]
+
+CATEGORY_LIBRARY = {
+    "Receitas": [
+        "Salário", "Freela", "Cliente recorrente", "Cliente pontual", "Venda de produto",
+        "Venda de serviço", "Vendas / maquininhas", "Reembolso", "Estorno", "Cashback",
+        "Rendimento", "Ajuda / presente", "Outras receitas"
+    ],
+    "Transferências/Ajustes": [
+        "Transferência entre contas", "Saque dinheiro", "Depósito dinheiro vivo",
+        "Troco / ajuste dinheiro vivo", "Pagamento de fatura", "Ajuste de saldo", "Saldo inicial"
+    ],
+    "Alimentação": [
+        "Mercado", "Feira", "Delivery", "Restaurante", "Padaria", "Cafeteria", "Lanche",
+        "Bebidas", "Açougue", "Hortifruti", "Atacado"
+    ],
+    "Moradia": [
+        "Aluguel", "Condomínio", "Luz", "Água", "Gás", "Internet", "IPTU",
+        "Seguro residencial", "Manutenção", "Móveis", "Decoração", "Limpeza"
+    ],
+    "Transporte": [
+        "Uber / 99 / Táxi", "Transporte público", "Combustível", "Estacionamento",
+        "Pedágio", "Manutenção veículo", "Seguro auto", "IPVA / Licenciamento", "Multa"
+    ],
+    "Saúde": [
+        "Farmácia", "Consulta", "Exames", "Dentista", "Psicólogo", "Plano de saúde",
+        "Medicamentos", "Vacinas", "Fisioterapia"
+    ],
+    "Cuidados pessoais": [
+        "Cabelo", "Barba", "Unha", "Estética", "Skincare", "Perfume", "Cosméticos",
+        "Higiene", "Academia", "Roupas de treino"
+    ],
+    "Educação": [
+        "Curso", "Faculdade", "Mentoria", "Livro", "E-book", "Certificação", "Idioma", "Material escolar"
+    ],
+    "Trabalho/PJ": [
+        "Software", "Ferramentas", "Contabilidade", "Impostos PJ", "DAS MEI", "Domínio / hospedagem",
+        "Material de escritório", "Marketing", "Anúncios", "Transporte trabalho", "Almoço trabalho"
+    ],
+    "Assinaturas": [
+        "Streaming", "Música", "Software", "Nuvem / armazenamento", "Clube de assinatura",
+        "Newsletter", "Academia recorrente", "Outras assinaturas"
+    ],
+    "Família": [
+        "Ajuda familiar", "Presente", "Criança / bebê", "Escola", "Brinquedos", "Passeio em família", "Despesa compartilhada"
+    ],
+    "Pets": [
+        "Ração", "Pet shop", "Veterinário", "Vacina", "Medicamento", "Banho e tosa", "Acessórios"
+    ],
+    "Lazer": [
+        "Cinema", "Show", "Teatro", "Bar", "Festa", "Passeio", "Praia", "Jogos", "Hobby", "Ingresso"
+    ],
+    "Compras": [
+        "Roupas", "Calçados", "Acessórios", "Eletrônicos", "Celular", "Computador",
+        "Casa", "Presentes", "Marketplace", "Amazon", "Mercado Livre", "Shopee", "Shein", "AliExpress"
+    ],
+    "Viagens": [
+        "Passagem", "Hospedagem", "Airbnb", "Hotel", "Seguro viagem", "Aluguel de carro",
+        "Alimentação viagem", "Passeios", "Compras viagem", "Câmbio", "Bagagem"
+    ],
+    "Cartões/Bancos": [
+        "Tarifa bancária", "Juros", "Anuidade", "IOF", "Taxa Pix", "Taxa saque", "Multa atraso",
+        "Empréstimo", "Financiamento", "Parcela carro", "Renegociação", "Taxas de maquininha"
+    ],
+    "Impostos/Documentos": [
+        "IRPF", "IPTU", "IPVA", "Cartório", "Documentos", "Passaporte", "DARF", "DAS", "INSS", "Multa"
+    ],
+    "Investimentos/Reservas": [
+        "Reserva emergência", "Tesouro Direto", "CDB", "Ações", "FIIs", "Cripto", "Previdência", "Poupança", "Aporte", "Resgate"
+    ],
+    "Outros": ["Geral", "Revisar", "Não identificado"]
+}
+
+# Regras em ordem de prioridade. O texto é normalizado sem acentos e em minúsculas.
+AUTO_CATEGORY_RULES = [
+    # Alimentação
+    (["ifood", "i-food", "rappi", "uber eats", "ubereats", "delivery much", "aiqfome"], "Alimentação", "Delivery", "delivery, comida, automatico"),
+    (["mercado", "supermercado", "super market", "assai", "atacadao", "guanabara", "mundial", "extra", "carrefour", "pao de acucar", "zona sul", "hortifruti", "horti fruti", "sacolao"], "Alimentação", "Mercado", "mercado, casa, automatico"),
+    (["feira", "quitanda", "hortifruti", "horti fruti"], "Alimentação", "Feira", "feira, comida, automatico"),
+    (["padaria", "panificadora", "bakery"], "Alimentação", "Padaria", "padaria, comida, automatico"),
+    (["restaurante", "restaurant", "lanchonete", "pizzaria", "hamburguer", "hamburger", "burger", "sushi", "japones", "churrascaria", "bistro", "cafeteria", "cafe ", "starbucks"], "Alimentação", "Restaurante", "restaurante, comida, automatico"),
+
+    # Transporte
+    (["uber", "99app", "99 pop", "99pop", "taxi", "cabify", "indrive"], "Transporte", "Uber / 99 / Táxi", "transporte, app, automatico"),
+    (["metro", "metrô", "supervia", "bilhete unico", "riocard", "onibus", "ônibus", "brt", "cptm", "trem"], "Transporte", "Transporte público", "transporte, automatico"),
+    (["posto", "gasolina", "etanol", "combustivel", "combustível", "shell", "ipiranga", "petrobras", "br mania", "esso", "texaco", "ale combustiveis"], "Transporte", "Combustível", "carro, combustivel, automatico"),
+    (["estacionamento", "parking", "zona azul", "parebem", "estapar"], "Transporte", "Estacionamento", "carro, automatico"),
+    (["pedagio", "pedágio", "sem parar", "conectcar", "veloe"], "Transporte", "Pedágio", "carro, automatico"),
+
+    # Moradia / contas fixas
+    (["aluguel", "locacao", "locação"], "Moradia", "Aluguel", "casa, recorrente, automatico"),
+    (["condominio", "condomínio"], "Moradia", "Condomínio", "casa, recorrente, automatico"),
+    (["enel", "light", "energia", "conta de luz", "eletricidade"], "Moradia", "Luz", "casa, recorrente, automatico"),
+    (["cedae", "aguas do rio", "águas do rio", "saneamento", "conta de agua", "conta de água"], "Moradia", "Água", "casa, recorrente, automatico"),
+    (["naturgy", "gas natural", "gás natural", "conta de gas", "conta de gás"], "Moradia", "Gás", "casa, recorrente, automatico"),
+    (["claro", "net claro", "vivo fibra", "tim live", "oi fibra", "internet", "banda larga"], "Moradia", "Internet", "casa, recorrente, automatico"),
+
+    # Saúde
+    (["farmacia", "farmácia", "drogaria", "drogasil", "droga raia", "raia", "pacheco", "venancio", "venâncio", "pague menos"], "Saúde", "Farmácia", "saude, automatico"),
+    (["consulta", "clinica", "clínica", "laboratorio", "laboratório", "exame", "diagnostico", "diagnóstico", "dentista", "odontologia"], "Saúde", "Consulta", "saude, automatico"),
+    (["unimed", "amil", "bradesco saude", "sulamerica saude", "notredame", "hapvida"], "Saúde", "Plano de saúde", "saude, recorrente, automatico"),
+
+    # Trabalho/PJ e software
+    (["adobe", "creative cloud", "photoshop", "illustrator", "canva", "figma", "capcut", "envato", "freepik", "shutterstock"], "Trabalho/PJ", "Software", "trabalho, software, automatico"),
+    (["openai", "chatgpt", "claude", "notion", "trello", "slack", "google workspace", "microsoft", "office 365", "zoom"], "Trabalho/PJ", "Ferramentas", "trabalho, software, automatico"),
+    (["registro.br", "godaddy", "hostinger", "hostgator", "cloudflare", "dominio", "domínio", "hospedagem"], "Trabalho/PJ", "Domínio / hospedagem", "trabalho, web, automatico"),
+    (["contabil", "contábil", "contabilidade", "contador", "certificado digital", "das mei", "simples nacional"], "Trabalho/PJ", "Contabilidade", "pj, imposto, automatico"),
+    (["facebook ads", "meta ads", "google ads", "tiktok ads", "impulsionamento", "anuncio", "anúncio"], "Trabalho/PJ", "Anúncios", "marketing, trabalho, automatico"),
+
+    # Assinaturas
+    (["netflix", "prime video", "amazon prime", "disney", "disney+", "globoplay", "max.com", "hbo", "paramount", "crunchyroll"], "Assinaturas", "Streaming", "assinatura, recorrente, automatico"),
+    (["spotify", "deezer", "youtube premium", "apple music"], "Assinaturas", "Música", "assinatura, recorrente, automatico"),
+    (["icloud", "google one", "dropbox", "onedrive"], "Assinaturas", "Nuvem / armazenamento", "assinatura, recorrente, automatico"),
+
+    # Compras / marketplaces
+    (["amazon", "mercado livre", "mercadolivre", "magalu", "magazine luiza", "americanas", "shopee", "shein", "aliexpress", "casas bahia", "ponto frio"], "Compras", "Marketplace", "compras, automatico"),
+    (["renner", "riachuelo", "cea", "c&a", "zara", "centauro", "nike", "adidas"], "Compras", "Roupas", "compras, roupas, automatico"),
+
+    # Cartões, bancos e maquininhas
+    (["tarifa", "cesta", "pacote de servicos", "pacote de serviços", "juros", "iof", "encargo", "multa"], "Cartões/Bancos", "Tarifa bancária", "banco, taxa, automatico"),
+    (["anuidade"], "Cartões/Bancos", "Anuidade", "cartao, taxa, automatico"),
+    (["emprestimo", "empréstimo", "financiamento", "parcela carro", "consignado"], "Cartões/Bancos", "Empréstimo", "divida, automatico"),
+    # Educação, lazer, família
+    (["curso", "hotmart", "udemy", "alura", "domestika", "coursera", "rocketseat", "faculdade", "universidade", "escola"], "Educação", "Curso", "educacao, automatico"),
+    (["cinema", "ingresso", "sympla", "eventim", "ticketmaster", "show", "teatro"], "Lazer", "Ingresso", "lazer, automatico"),
+    (["presente", "aniversario", "aniversário", "brinquedo", "roupinha", "maria helena", "maria-helena"], "Família", "Presente", "familia, presente, automatico"),
+
+    # Pets
+    (["pet", "petz", "cobasi", "veterinario", "veterinário", "racao", "ração", "banho e tosa"], "Pets", "Pet shop", "pet, automatico"),
+]
+
+INCOME_RULES = [
+    (["freela", "freelance", "cliente", "design", "social media", "servico", "serviço", "consultoria"], "Receitas", "Freela", "trabalho, receita, automatico"),
+    (["salario", "salário", "pagamento salario", "pro labore", "pró-labore", "13", "decimo terceiro", "décimo terceiro"], "Receitas", "Salário", "receita, automatico"),
+    (["reembolso", "estorno", "devolucao", "devolução"], "Receitas", "Reembolso", "reembolso, automatico"),
+    (["cashback"], "Receitas", "Cashback", "cashback, automatico"),
+    (["dividendo", "rendimento", "juros sobre capital", "tesouro", "cdb", "fii"], "Receitas", "Rendimento", "investimento, automatico"),
+    (["pagseguro", "pag seguro", "stone", "ton ", "sumup", "cielo", "rede", "getnet", "safrapay", "infinitepay", "mercado pago", "maquininha"], "Receitas", "Vendas / maquininhas", "maquininha, vendas, automatico"),
+]
+
+def worksheet_column_letter(col_number):
+    result = ""
+    while col_number:
+        col_number, remainder = divmod(col_number - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
+
+def ensure_transaction_headers():
+    try:
+        values = google_sheets_retry(worksheet.get_all_values)
+        if not values:
+            google_sheets_retry(worksheet.append_row, TRANSACTION_HEADERS, value_input_option="RAW")
+            return TRANSACTION_HEADERS
+
+        current_headers = [str(h).strip() for h in values[0]]
+        final_headers = current_headers[:]
+        changed = False
+        for header in TRANSACTION_HEADERS:
+            if header not in final_headers:
+                final_headers.append(header)
+                changed = True
+
+        if changed:
+            last_col = worksheet_column_letter(len(final_headers))
+            google_sheets_retry(
+                worksheet.update,
+                range_name=f"A1:{last_col}1",
+                values=[final_headers],
+                value_input_option="RAW"
+            )
+        return final_headers
+    except Exception:
+        return []
+
+def get_category_options():
+    return ["Sem categoria"] + list(CATEGORY_LIBRARY.keys())
+
+def get_subcategory_options(category):
+    category = clean_text(category)
+    if category == "Sem categoria" or category not in CATEGORY_LIBRARY:
+        return ["Sem subcategoria"]
+    return ["Sem subcategoria"] + CATEGORY_LIBRARY.get(category, [])
+
+def normalize_rule_text(value):
+    return strip_accents(value).lower()
+
+def join_tags(*tag_values):
+    tags = []
+    for tag_value in tag_values:
+        for tag in clean_text(tag_value).replace("#", "").split(","):
+            cleaned = strip_accents(tag).strip().replace(" ", "-")
+            if cleaned and cleaned not in tags:
+                tags.append(cleaned)
+    return ", ".join(tags)
+
+def suggest_category(description, tx_type="saida", payment_method="", source="", notes=""):
+    desc_text = clean_text(description)
+    # A origem do arquivo/banco vira tag, mas não deve influenciar a categoria.
+    # Ex.: uma fatura do cartão Amazon Prime não significa que toda compra seja assinatura Amazon.
+    combined = normalize_rule_text(f"{description} {payment_method} {notes}")
+    tx_type = clean_text(tx_type).lower()
+    payment_method = clean_text(payment_method).lower()
+
+    if payment_method == "saque_dinheiro":
+        return "Transferências/Ajustes", "Saque dinheiro", "ajuste, dinheiro-vivo"
+    if payment_method == "troco_dinheiro" or "troco" in combined:
+        return "Transferências/Ajustes", "Troco / ajuste dinheiro vivo", "ajuste, dinheiro-vivo"
+    if payment_method == "pagamento_fatura":
+        return "Transferências/Ajustes", "Pagamento de fatura", "cartao, ajuste"
+
+    rules = INCOME_RULES if tx_type == "entrada" else AUTO_CATEGORY_RULES
+    for keywords, category, subcategory, tags in rules:
+        if any(normalize_rule_text(keyword) in combined for keyword in keywords):
+            if tx_type == "entrada" and category not in ["Receitas", "Transferências/Ajustes"]:
+                return "Receitas", "Outras receitas", join_tags(tags, "receita", "automatico")
+            return category, subcategory, join_tags(tags)
+
+    if tx_type == "entrada":
+        if desc_text:
+            return "Receitas", "Outras receitas", "receita, revisar"
+        return "Sem categoria", "Sem subcategoria", ""
+
+    return "Outros", "Revisar", "revisar"
+
+def normalize_category_for_save(category):
+    category = clean_text(category)
+    return "" if category == "Sem categoria" else category
+
+def normalize_subcategory_for_save(subcategory):
+    subcategory = clean_text(subcategory)
+    return "" if subcategory == "Sem subcategoria" else subcategory
+
+def category_badge_html(category, subcategory, tags):
+    category = clean_text(category)
+    subcategory = clean_text(subcategory)
+    tags = clean_text(tags)
+    if not category and not subcategory and not tags:
+        return ""
+    label = html.escape(category or "Sem categoria")
+    if subcategory:
+        label += f" › {html.escape(subcategory)}"
+    tag_html = ""
+    if tags:
+        tag_parts = [html.escape(tag.strip()) for tag in tags.split(",") if tag.strip()]
+        tag_html = "".join(f'<span class="tx-tag">#{tag}</span>' for tag in tag_parts[:4])
+    return f'<div class="tx-category-line"><span class="tx-category-pill">{label}</span>{tag_html}</div>'
+
 def safe_float(val):
     if val is None or pd.isna(val):
         return 0.0
@@ -2241,6 +2561,7 @@ def safe_float(val):
 @st.cache_data(ttl=5)
 def load_data():
     try:
+        ensure_transaction_headers()
         raw_rows = google_sheets_retry(worksheet.get_all_values)
         if len(raw_rows) <= 1:
             return []
@@ -2260,6 +2581,9 @@ def load_data():
             "bought_by": headers.index("bought_by") if "bought_by" in headers else 8,
             "created_at": headers.index("created_at") if "created_at" in headers else 9,
             "notes": headers.index("notes") if "notes" in headers else 10,
+            "category": headers.index("category") if "category" in headers else 11,
+            "subcategory": headers.index("subcategory") if "subcategory" in headers else 12,
+            "tags": headers.index("tags") if "tags" in headers else 13,
         }
 
         for idx, row in enumerate(raw_rows[1:], start=2):
@@ -2278,6 +2602,9 @@ def load_data():
                 "is_for_someone": clean_text(row[field_map["is_for_someone"]]),
                 "bought_by": clean_text(row[field_map["bought_by"]]),
                 "notes": clean_text(row[field_map["notes"]]),
+                "category": clean_text(row[field_map["category"]]) if field_map["category"] < len(row) else "",
+                "subcategory": clean_text(row[field_map["subcategory"]]) if field_map["subcategory"] < len(row) else "",
+                "tags": clean_text(row[field_map["tags"]]) if field_map["tags"] < len(row) else "",
             }
             
             raw_date = clean_text(row[field_map["created_at"]])
@@ -2884,6 +3211,11 @@ def render_import_csv_page(selected_month, selected_year, records):
         import_id = hashlib.sha1(import_id_base.encode("utf-8")).hexdigest()[:12]
         duplicate_key = build_duplicate_key(parsed_date, raw_desc, amount_abs, payment_method, card)
         is_duplicate = duplicate_key in duplicate_keys
+        auto_category, auto_subcategory, auto_tags = suggest_category(raw_desc, tx_type, payment_method, source)
+        if auto_tags:
+            auto_tags = join_tags(auto_tags, "importado", source)
+        else:
+            auto_tags = join_tags("importado", source)
 
         preview_rows.append({
             "Importar": not is_duplicate,
@@ -2894,6 +3226,9 @@ def render_import_csv_page(selected_month, selected_year, records):
             "Método": format_payment_method_label(payment_method),
             "Cartão": card,
             "Valor": amount_abs,
+            "Categoria": auto_category,
+            "Subcategoria": auto_subcategory,
+            "Tags": auto_tags,
             "created_at_raw": parsed_date.strftime("%Y-%m-%d %H:%M:%S"),
             "payment_method_raw": payment_method,
             "type_raw": tx_type,
@@ -2924,7 +3259,7 @@ def render_import_csv_page(selected_month, selected_year, records):
     st.markdown("### Prévia da importação")
     st.caption("Desmarque as linhas que você não quer importar. Linhas marcadas como possível duplicado já vêm desmarcadas.")
 
-    visible_columns = ["Importar", "Status", "Data", "Descrição", "Tipo", "Método", "Cartão", "Valor"]
+    visible_columns = ["Importar", "Status", "Data", "Descrição", "Tipo", "Método", "Cartão", "Valor", "Categoria", "Subcategoria", "Tags"]
     edited_preview = st.data_editor(
         preview_df[visible_columns],
         use_container_width=True,
@@ -2937,8 +3272,13 @@ def render_import_csv_page(selected_month, selected_year, records):
         key=f"csv_preview_{uploaded_file.name}_{source}_{import_type}",
     )
 
+    edited_full_preview = preview_df.copy()
+    for editable_col in visible_columns:
+        if editable_col in edited_preview.columns:
+            edited_full_preview[editable_col] = edited_preview[editable_col]
+
     selected_indexes = edited_preview.index[edited_preview["Importar"] == True].tolist()
-    rows_to_import = preview_df.loc[selected_indexes]
+    rows_to_import = edited_full_preview.loc[selected_indexes]
     rows_to_import = rows_to_import[rows_to_import["Status"] != "Possível duplicado"]
 
     st.caption(f"{len(rows_to_import)} linha(s) selecionada(s) para importar.")
@@ -2965,10 +3305,14 @@ def render_import_csv_page(selected_month, selected_year, records):
                 "",
                 row["created_at_raw"],
                 notes,
+                normalize_category_for_save(row.get("Categoria", "")),
+                normalize_subcategory_for_save(row.get("Subcategoria", "")),
+                clean_text(row.get("Tags", "")),
             ])
 
         try:
             if rows_for_sheet:
+                ensure_transaction_headers()
                 google_sheets_retry(worksheet.append_rows, rows_for_sheet, value_input_option="RAW")
                 st.cache_data.clear()
                 st.success(f"Importação concluída: {len(rows_for_sheet)} transação(ões) adicionada(s).")
@@ -3214,6 +3558,46 @@ if page_key == "home":
             tx_desc = d_col1.text_input("Descrição", value=st.session_state.edit_values.get("description", ""), placeholder="Ex: Mercado", key=f"desc_{state_key}")
             tx_amount_str = d_col2.text_input("Valor Total (R$)", value=default_amount_str, placeholder="Ex: 45,50", key=f"amount_str_{state_key}")
 
+            suggested_category, suggested_subcategory, suggested_tags = suggest_category(tx_desc, tx_type, tx_method)
+            existing_category = clean_text(st.session_state.edit_values.get("category", ""))
+            existing_subcategory = clean_text(st.session_state.edit_values.get("subcategory", ""))
+            existing_tags = clean_text(st.session_state.edit_values.get("tags", ""))
+
+            category_options = get_category_options()
+            default_category = existing_category or suggested_category or "Sem categoria"
+            if default_category not in category_options:
+                default_category = "Sem categoria"
+
+            cat_col1, cat_col2 = st.columns(2)
+            tx_category = cat_col1.selectbox(
+                "Categoria",
+                category_options,
+                index=category_options.index(default_category),
+                key=f"cat_{state_key}",
+                help="Use categoria e subcategoria para alimentar relatórios e orçamentos."
+            )
+
+            subcategory_options = get_subcategory_options(tx_category)
+            default_subcategory = existing_subcategory or (suggested_subcategory if tx_category == suggested_category else "Sem subcategoria")
+            if default_subcategory not in subcategory_options:
+                default_subcategory = "Sem subcategoria"
+            tx_subcategory = cat_col2.selectbox(
+                "Subcategoria",
+                subcategory_options,
+                index=subcategory_options.index(default_subcategory),
+                key=f"subcat_{state_key}"
+            )
+
+            tx_tags = st.text_input(
+                "Tags",
+                value=existing_tags or suggested_tags,
+                placeholder="Ex: casa, família, trabalho",
+                key=f"tags_{state_key}",
+                help="Separe tags por vírgula. Ex: casa, família, parcelado"
+            )
+            if tx_desc and suggested_category not in ["", "Sem categoria"]:
+                st.caption(f"✨ Sugestão automática: **{suggested_category} › {suggested_subcategory}**")
+
             installments = int(st.session_state.edit_values.get("installments", 1)) if st.session_state.edit_values.get("installments") else 1
             card_brand = st.session_state.edit_values.get("card", "")
             is_for_someone = True if st.session_state.edit_values.get("is_for_someone") in ["TRUE", True] else False
@@ -3283,7 +3667,10 @@ if page_key == "home":
                     "TRUE" if is_for_someone else "FALSE",
                     bought_by,
                     tx_date.strftime("%Y-%m-%d %H:%M:%S"),
-                    tx_notes
+                    tx_notes,
+                    normalize_category_for_save(tx_category),
+                    normalize_subcategory_for_save(tx_subcategory),
+                    clean_text(tx_tags)
                 ]
             
                 is_new_transaction = st.session_state.editing_index is None
@@ -3292,13 +3679,14 @@ if page_key == "home":
                     if st.session_state.editing_index is not None:
                         google_sheets_retry(
                             worksheet.update,
-                            range_name=f"A{st.session_state.editing_index}:K{st.session_state.editing_index}",
+                            range_name=f"A{st.session_state.editing_index}:N{st.session_state.editing_index}",
                             values=[updated_row],
                             value_input_option="RAW"
                         )
                         st.session_state.editing_index = None
                         st.session_state.edit_values = {}
                     else:
+                        ensure_transaction_headers()
                         google_sheets_retry(worksheet.append_row, updated_row, value_input_option="RAW")
                     
                     if is_new_transaction:
@@ -3330,6 +3718,7 @@ if page_key == "home":
                 f_type = st.selectbox("Filtrar por Tipo", ["Todos", "entrada", "saida"], key="hist_filter_type")
                 f_card = st.selectbox("Filtrar por Cartão", ["Todos"] + [c for c in df_hist["card"].dropna().unique() if str(c) != ""], key="hist_filter_card")
                 f_buyer = st.selectbox("Filtrar por Comprador", ["Todos"] + [b for b in df_hist["bought_by"].dropna().unique() if str(b) != ""], key="hist_filter_buyer")
+                f_category = st.selectbox("Filtrar por Categoria", ["Todos"] + [c for c in df_hist["category"].dropna().unique() if str(c) != ""], key="hist_filter_category")
                 sort_option = st.selectbox(
                     "Ordenar por",
                     options=[
@@ -3357,6 +3746,9 @@ if page_key == "home":
                         str(row.get("payment_method", "")),
                         str(row.get("card", "")),
                         str(row.get("bought_by", "")),
+                        str(row.get("category", "")),
+                        str(row.get("subcategory", "")),
+                        str(row.get("tags", "")),
                         format_currency(val_float),
                         f"{val_float:.2f}",
                         f"{val_float:.2f}".replace(".", ","),
@@ -3379,6 +3771,8 @@ if page_key == "home":
                 df_hist = df_hist[df_hist["card"] == f_card]
             if f_buyer != "Todos":
                 df_hist = df_hist[df_hist["bought_by"] == f_buyer]
+            if f_category != "Todos":
+                df_hist = df_hist[df_hist["category"] == f_category]
             
             if sort_option == "Data: mais recente no topo":
                 df_hist = df_hist.sort_values(by="created_at", ascending=False)
@@ -3425,6 +3819,9 @@ if page_key == "home":
                     with st.container(border=True):
                         st.markdown(f"**{desc}**")
                         st.caption(meta)
+                        badge_html = category_badge_html(row.get("category", ""), row.get("subcategory", ""), row.get("tags", ""))
+                        if badge_html:
+                            st.markdown(badge_html, unsafe_allow_html=True)
 
                         clean_desc = clean_text(row.get("description", ""))
                         if clean_notes and clean_notes != clean_desc:
