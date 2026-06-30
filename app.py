@@ -18,6 +18,210 @@ import hashlib
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="collapsed")
 
+# 🔐 Trava de acesso por senha
+# Configure a senha no Streamlit Secrets como:
+# APP_PASSWORD = "sua_senha_aqui"
+# ou:
+# [auth]
+# password = "sua_senha_aqui"
+def get_app_access_password():
+    candidates = []
+    try:
+        candidates.append(str(st.secrets.get("APP_PASSWORD", "")).strip())
+    except Exception:
+        pass
+    try:
+        auth_secret = st.secrets.get("auth", {})
+        if hasattr(auth_secret, "get"):
+            candidates.append(str(auth_secret.get("password", "")).strip())
+    except Exception:
+        pass
+    try:
+        candidates.append(str(os.environ.get("APP_PASSWORD", "")).strip())
+    except Exception:
+        pass
+    return next((candidate for candidate in candidates if candidate), "")
+
+
+def render_password_gate():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(135deg, #f7faf8 0%, #eef5f0 100%) !important;
+        }
+
+        .stApp::before {
+            content: "";
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 2147483646 !important;
+            background: rgba(255, 255, 255, 0.78) !important;
+            backdrop-filter: blur(18px) !important;
+            -webkit-backdrop-filter: blur(18px) !important;
+        }
+
+        [data-testid="stHeader"],
+        header[data-testid="stHeader"],
+        [data-testid="stSidebar"],
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+
+        .block-container {
+            padding: 0 !important;
+            max-width: 100vw !important;
+        }
+
+        div[data-testid="stForm"] {
+            position: fixed !important;
+            z-index: 2147483647 !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: min(430px, calc(100vw - 40px)) !important;
+            padding: 34px 32px 30px 32px !important;
+            border-radius: 28px !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1px solid rgba(56, 130, 83, 0.20) !important;
+            box-shadow: 0 24px 80px rgba(31, 41, 55, 0.22) !important;
+        }
+
+        div[data-testid="stForm"] h1,
+        div[data-testid="stForm"] h2,
+        div[data-testid="stForm"] h3,
+        div[data-testid="stForm"] p,
+        div[data-testid="stForm"] label,
+        div[data-testid="stForm"] span {
+            color: #2f3342 !important;
+        }
+
+        div[data-testid="stForm"] input {
+            background: #f3f6f5 !important;
+            color: #2f3342 !important;
+            border: 1px solid rgba(47, 51, 66, 0.18) !important;
+            border-radius: 14px !important;
+        }
+
+        div[data-testid="stForm"] input:focus {
+            border-color: #388253 !important;
+            box-shadow: 0 0 0 1px #388253 !important;
+        }
+
+        div[data-testid="stForm"] button[kind="primaryFormSubmit"] {
+            width: 100% !important;
+            background: #388253 !important;
+            color: #ffffff !important;
+            border: 0 !important;
+            border-radius: 14px !important;
+            min-height: 46px !important;
+            font-weight: 800 !important;
+            margin-top: 8px !important;
+        }
+
+        div[data-testid="stForm"] button[kind="primaryFormSubmit"]:hover {
+            background: #2f7048 !important;
+            color: #ffffff !important;
+        }
+
+        .access-lock-title {
+            font-size: 2rem;
+            line-height: 1.12;
+            font-weight: 900;
+            color: #2f3342;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.04em;
+            text-align: center;
+        }
+
+        .access-lock-subtitle {
+            font-size: 0.98rem;
+            line-height: 1.45;
+            color: #6b7280;
+            margin: 0 0 22px 0;
+            text-align: center;
+        }
+
+        .access-lock-badge {
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 16px auto;
+            border-radius: 18px;
+            background: rgba(56, 130, 83, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #388253;
+            font-size: 1.75rem;
+            font-weight: 900;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .stApp {
+                background: linear-gradient(135deg, #171b23 0%, #222934 100%) !important;
+            }
+            .stApp::before {
+                background: rgba(17, 24, 39, 0.78) !important;
+            }
+            div[data-testid="stForm"] {
+                background: rgba(35, 40, 52, 0.96) !important;
+                border-color: rgba(255, 255, 255, 0.10) !important;
+                box-shadow: 0 24px 80px rgba(0, 0, 0, 0.40) !important;
+            }
+            div[data-testid="stForm"] h1,
+            div[data-testid="stForm"] h2,
+            div[data-testid="stForm"] h3,
+            div[data-testid="stForm"] p,
+            div[data-testid="stForm"] label,
+            div[data-testid="stForm"] span,
+            .access-lock-title {
+                color: #f9fafb !important;
+            }
+            .access-lock-subtitle {
+                color: #d1d5db !important;
+            }
+            div[data-testid="stForm"] input {
+                background: #111827 !important;
+                color: #f9fafb !important;
+                border-color: rgba(255, 255, 255, 0.16) !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    expected_password = get_app_access_password()
+    with st.form("access_password_form", clear_on_submit=False):
+        st.markdown('<div class="access-lock-badge">🔒</div>', unsafe_allow_html=True)
+        st.markdown('<div class="access-lock-title">Acesso restrito</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="access-lock-subtitle">Digite a senha para abrir o Meu App Finanças.</div>',
+            unsafe_allow_html=True,
+        )
+        typed_password = st.text_input("Senha", type="password", placeholder="Digite a senha")
+        submitted = st.form_submit_button("Entrar")
+
+        if not expected_password:
+            st.error("Senha de acesso não configurada nos Secrets do Streamlit.")
+        elif submitted:
+            if typed_password == expected_password:
+                st.session_state["app_authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta. Tente novamente.")
+
+
+if "app_authenticated" not in st.session_state:
+    st.session_state["app_authenticated"] = False
+
+if not st.session_state["app_authenticated"]:
+    render_password_gate()
+    st.stop()
+
 # 🌟 CSS AGRESSIVO: Forçando a remoção do laranja em tudo
 st.markdown("""
 <style>
