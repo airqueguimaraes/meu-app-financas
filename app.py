@@ -3110,6 +3110,147 @@ def build_existing_transaction_keys(records):
         )
     return keys
 
+
+def parse_import_note_metadata(notes):
+    """Extrai metadados de importações antigas e novas a partir do campo notes."""
+    notes_clean = clean_text(notes)
+    if "Importado via CSV" not in notes_clean:
+        return None
+
+    def pick(label):
+        match = re.search(rf"{re.escape(label)}\s*:\s*([^|]+)", notes_clean, flags=re.IGNORECASE)
+        return clean_text(match.group(1)) if match else ""
+
+    source = pick("Origem") or "Origem não identificada"
+    file_name = pick("Arquivo") or "Arquivo não identificado"
+    import_id = pick("ID")
+    batch_id = pick("Lote")
+    imported_at = pick("Importado em")
+
+    # Importações antigas não tinham Lote. Agrupamos por origem + arquivo para permitir desfazer.
+    if not batch_id:
+        batch_base = f"legacy|{source}|{file_name}"
+        batch_id = hashlib.sha1(batch_base.encode("utf-8")).hexdigest()[:12]
+
+    return {
+        "batch_id": batch_id,
+        "source": source,
+        "file_name": file_name,
+        "import_id": import_id,
+        "imported_at": imported_at,
+        "is_legacy": "Lote:" not in notes_clean,
+    }
+
+
+def build_import_history(records):
+    groups = {}
+    for record in records:
+        meta = parse_import_note_metadata(record.get("notes", ""))
+        if not meta:
+            continue
+
+        batch_id = meta["batch_id"]
+        if batch_id not in groups:
+            groups[batch_id] = {
+                "batch_id": batch_id,
+                "source": meta["source"],
+                "file_name": meta["file_name"],
+                "imported_at": meta["imported_at"],
+                "is_legacy": meta["is_legacy"],
+                "rows": [],
+                "count": 0,
+                "income": 0.0,
+                "expense": 0.0,
+                "start_date": None,
+                "end_date": None,
+            }
+
+        group = groups[batch_id]
+        group["rows"].append(int(record.get("sheet_row_idx", 0)))
+        group["count"] += 1
+
+        amount = abs(safe_float(record.get("amount", 0)))
+        if clean_text(record.get("type", "")).lower() == "entrada":
+            group["income"] += amount
+        elif clean_text(record.get("type", "")).lower() == "saida":
+            group["expense"] += amount
+
+        record_date = record.get("created_at")
+        if isinstance(record_date, pd.Timestamp):
+            record_date = record_date.to_pydatetime()
+        if isinstance(record_date, datetime):
+            if group["start_date"] is None or record_date < group["start_date"]:
+                group["start_date"] = record_date
+            if group["end_date"] is None or record_date > group["end_date"]:
+                group["end_date"] = record_date
+
+    history = list(groups.values())
+    history.sort(key=lambda item: item["end_date"] or datetime.min, reverse=True)
+    return history
+
+
+def delete_import_batch(row_indices):
+    rows = sorted([int(row) for row in row_indices if int(row) > 1], reverse=True)
+    for row_idx in rows:
+        google_sheets_retry(worksheet.delete_rows, row_idx)
+    st.cache_data.clear()
+    return len(rows)
+
+
+def render_import_history(records):
+    history = build_import_history(records)
+
+    st.markdown("### Histórico de importações")
+    st.caption("Use esta área para desfazer rapidamente um CSV importado. Ao desfazer, todas as transações criadas por aquela importação são removidas da planilha.")
+
+    if not history:
+        st.info("Nenhuma importação CSV encontrada ainda.")
+        return
+
+    pending_key = st.session_state.get("pending_import_delete")
+
+    for item in history:
+        period = "Período não identificado"
+        if item["start_date"] and item["end_date"]:
+            if item["start_date"].date() == item["end_date"].date():
+                period = item["start_date"].strftime("%d/%m/%Y")
+            else:
+                period = f"{item['start_date'].strftime('%d/%m/%Y')} a {item['end_date'].strftime('%d/%m/%Y')}"
+
+        imported_label = item["imported_at"] or "Importação anterior"
+        legacy_label = " · importação antiga" if item.get("is_legacy") else ""
+        title = f"{item['source']} · {item['count']} transação(ões) · {period}"
+
+        with st.expander(title, expanded=False):
+            st.markdown(
+                f"""
+                **Arquivo:** {item['file_name']}  
+                **Lote:** `{item['batch_id']}`{legacy_label}  
+                **Importado em:** {imported_label}  
+                **Entradas:** {format_currency(item['income'])}  
+                **Saídas:** {format_currency(item['expense'])}
+                """
+            )
+
+            if pending_key == item["batch_id"]:
+                st.warning(f"Confirme para remover {item['count']} transação(ões) dessa importação da planilha.")
+                confirm_col, cancel_col = st.columns([0.55, 0.45])
+                if confirm_col.button("Confirmar exclusão da importação", type="primary", key=f"confirm_delete_import_{item['batch_id']}"):
+                    try:
+                        deleted_count = delete_import_batch(item["rows"])
+                        st.session_state["import_success_message"] = f"Importação desfeita: {deleted_count} transação(ões) removida(s)."
+                        st.session_state.pop("pending_import_delete", None)
+                        st.rerun()
+                    except Exception as err:
+                        st.error(f"Erro ao desfazer importação: {err}")
+                if cancel_col.button("Cancelar", key=f"cancel_delete_import_{item['batch_id']}"):
+                    st.session_state.pop("pending_import_delete", None)
+                    st.rerun()
+            else:
+                if st.button("🗑️ Desfazer esta importação", key=f"delete_import_{item['batch_id']}"):
+                    st.session_state["pending_import_delete"] = item["batch_id"]
+                    st.rerun()
+
 def render_import_csv_page(selected_month, selected_year, records):
     st.markdown("# Importe os dados do seu banco")
     st.markdown(
@@ -3120,6 +3261,13 @@ def render_import_csv_page(selected_month, selected_year, records):
         '<div class="import-note-box">O arquivo que você importar não é salvo em nenhum local, ou pasta do app. Ele é lido temporariamente para sua segurança.</div>',
         unsafe_allow_html=True
     )
+
+    success_message = st.session_state.pop("import_success_message", "") if "import_success_message" in st.session_state else ""
+    if success_message:
+        st.success(success_message)
+
+    render_import_history(records)
+    st.divider()
 
     setup_col, help_col = st.columns([0.48, 0.52], gap="large")
 
@@ -3150,20 +3298,32 @@ def render_import_csv_page(selected_month, selected_year, records):
         st.info("Envie um arquivo CSV para começar a importação.")
         return
 
+    progress_placeholder = st.empty()
+    status_placeholder = st.empty()
+    progress_bar = progress_placeholder.progress(0)
+    status_placeholder.caption("Upload recebido. Preparando leitura do arquivo...")
+    progress_bar.progress(8)
+
     try:
         df_csv = read_uploaded_csv(uploaded_file)
+        progress_bar.progress(28)
+        status_placeholder.caption("Arquivo lido. Validando colunas...")
     except Exception as err:
+        progress_placeholder.empty()
+        status_placeholder.empty()
         st.error(f"Erro ao ler o arquivo CSV: {err}")
         return
 
     if df_csv.empty:
+        progress_placeholder.empty()
+        status_placeholder.empty()
         st.warning("O CSV foi lido, mas não possui linhas para importar.")
         return
 
     columns = list(df_csv.columns)
-    default_date_col = guess_column(columns, ["data", "date", "dt", "data da transacao", "data transacao", "data de lançamento"])
-    default_desc_col = guess_column(columns, ["descricao", "descrição", "lancamento", "lançamento", "historico", "histórico", "title", "nome"])
-    default_value_col = guess_column(columns, ["valor", "amount", "vlr", "preco", "preço", "total"])
+    default_date_col = guess_column(columns, ["data", "date", "dt", "data da transacao", "data transacao", "data de lançamento", "transaction_date"])
+    default_desc_col = guess_column(columns, ["descricao", "descrição", "lancamento", "lançamento", "historico", "histórico", "title", "nome", "description", "detail", "transaction_type"])
+    default_value_col = guess_column(columns, ["settlement_net_amount", "real_amount", "valor", "amount", "vlr", "preco", "preço", "total", "transaction_amount"])
 
     st.markdown("### Mapeamento de colunas")
     map_col1, map_col2, map_col3 = st.columns(3)
@@ -3171,14 +3331,18 @@ def render_import_csv_page(selected_month, selected_year, records):
     desc_col = map_col2.selectbox("Coluna de descrição", columns, index=columns.index(default_desc_col) if default_desc_col in columns else 0)
     value_col = map_col3.selectbox("Coluna de valor", columns, index=columns.index(default_value_col) if default_value_col in columns else 0)
 
+    progress_bar.progress(42)
+    status_placeholder.caption("Mapeamento aplicado. Processando linhas...")
+
     default_card = source
     if source == "Mei Fácil":
         default_card = "Mei Fácil"
 
     duplicate_keys = build_existing_transaction_keys(records)
     preview_rows = []
+    total_csv_rows = max(len(df_csv), 1)
 
-    for idx, raw_row in df_csv.iterrows():
+    for position, (idx, raw_row) in enumerate(df_csv.iterrows(), start=1):
         raw_date = raw_row.get(date_col, "")
         raw_desc = clean_text(raw_row.get(desc_col, ""))
         raw_amount = parse_import_amount(raw_row.get(value_col, 0))
@@ -3236,7 +3400,14 @@ def render_import_csv_page(selected_month, selected_year, records):
             "import_id": import_id,
         })
 
+        if position == total_csv_rows or position % max(1, total_csv_rows // 20) == 0:
+            progress_value = 42 + int((position / total_csv_rows) * 48)
+            progress_bar.progress(min(progress_value, 90))
+            status_placeholder.caption(f"Processando linhas... {position}/{total_csv_rows}")
+
     if not preview_rows:
+        progress_placeholder.empty()
+        status_placeholder.empty()
         st.warning("Não encontrei linhas válidas para importar nesse CSV.")
         return
 
@@ -3245,6 +3416,9 @@ def render_import_csv_page(selected_month, selected_year, records):
     duplicate_count = int((preview_df["Status"] == "Possível duplicado").sum())
     total_income = preview_df.loc[preview_df["type_raw"] == "entrada", "Valor"].sum()
     total_expense = preview_df.loc[preview_df["type_raw"] == "saida", "Valor"].sum()
+
+    progress_bar.progress(100)
+    status_placeholder.success("Carregamento concluído")
 
     summary_html = (
         '<div class="import-summary-grid">'
@@ -3284,14 +3458,27 @@ def render_import_csv_page(selected_month, selected_year, records):
     st.caption(f"{len(rows_to_import)} linha(s) selecionada(s) para importar.")
 
     if st.button("Importar transações selecionadas", type="primary", disabled=rows_to_import.empty):
+        import_progress_placeholder = st.empty()
+        import_status_placeholder = st.empty()
+        import_progress = import_progress_placeholder.progress(0)
+        import_status_placeholder.caption("Preparando importação para o Google Sheets...")
+
         rows_for_sheet = []
-        for _, row in rows_to_import.iterrows():
+        batch_base = f"{uploaded_file.name}|{source}|{import_type}|{datetime.now().isoformat()}"
+        batch_id = hashlib.sha1(batch_base.encode("utf-8")).hexdigest()[:12]
+        imported_at = datetime.now().strftime("%d/%m/%Y %H:%M")
+        total_to_import = max(len(rows_to_import), 1)
+
+        for position, (_, row) in enumerate(rows_to_import.iterrows(), start=1):
             amount = safe_float(row["Valor"])
             payment_method = row["payment_method_raw"]
             tx_type = row["type_raw"]
             card = clean_text(row["card_raw"])
             installment_value = amount
-            notes = f"Importado via CSV | Origem: {source} | Arquivo: {uploaded_file.name} | ID: {row['import_id']}"
+            notes = (
+                f"Importado via CSV | Origem: {source} | Arquivo: {uploaded_file.name} | "
+                f"Lote: {batch_id} | Importado em: {imported_at} | ID: {row['import_id']}"
+            )
 
             rows_for_sheet.append([
                 tx_type,
@@ -3310,16 +3497,24 @@ def render_import_csv_page(selected_month, selected_year, records):
                 clean_text(row.get("Tags", "")),
             ])
 
+            if position == total_to_import or position % max(1, total_to_import // 10) == 0:
+                import_progress.progress(min(80, int((position / total_to_import) * 80)))
+                import_status_placeholder.caption(f"Preparando linhas... {position}/{total_to_import}")
+
         try:
             if rows_for_sheet:
                 ensure_transaction_headers()
+                import_progress.progress(88)
+                import_status_placeholder.caption("Enviando para o Google Sheets...")
                 google_sheets_retry(worksheet.append_rows, rows_for_sheet, value_input_option="RAW")
+                import_progress.progress(100)
+                import_status_placeholder.success("Importação concluída")
                 st.cache_data.clear()
-                st.success(f"Importação concluída: {len(rows_for_sheet)} transação(ões) adicionada(s).")
+                st.session_state["import_success_message"] = f"Importação concluída: {len(rows_for_sheet)} transação(ões) adicionada(s). Lote: {batch_id}"
                 st.rerun()
         except Exception as err:
+            import_status_placeholder.empty()
             st.error(f"Erro ao importar transações: {err}")
-
 
 def render_install_app_page():
     installed = is_running_installed_webapp()
