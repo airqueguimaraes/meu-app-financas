@@ -1707,15 +1707,47 @@ st.markdown("""
         border-color: rgba(255, 255, 255, 0.12) !important;
     }
 
-    /* Dataframes / tabelas do Streamlit */
+    /* Dataframes / tabelas do Streamlit
+       Observação: o st.data_editor usa canvas/Glide Data Grid. Em dark mode,
+       forçar só o fundo do container escuro deixa a prévia invisível. Por isso,
+       a grade de pré-visualização fica em tema claro controlado por variáveis
+       do Glide, mesmo quando o resto do app está em modo escuro. */
     [data-testid="stDataFrame"],
+    [data-testid="stTable"] {
+        color-scheme: light !important;
+        background-color: #ffffff !important;
+        color: #2f3342 !important;
+        -webkit-text-fill-color: #2f3342 !important;
+        border-color: rgba(47, 51, 66, 0.12) !important;
+        --gdg-bg-cell: #ffffff !important;
+        --gdg-bg-cell-medium: #f8fafc !important;
+        --gdg-bg-header: #f3f5f8 !important;
+        --gdg-bg-header-hovered: #edf1f5 !important;
+        --gdg-bg-header-has-focus: #e8eef3 !important;
+        --gdg-text-dark: #2f3342 !important;
+        --gdg-text-medium: #4b5563 !important;
+        --gdg-text-light: #6b7280 !important;
+        --gdg-text-header: #4b5563 !important;
+        --gdg-border-color: rgba(47, 51, 66, 0.12) !important;
+        --gdg-accent-color: #328655 !important;
+        --gdg-accent-light: rgba(50, 134, 85, 0.14) !important;
+    }
+
     [data-testid="stDataFrame"] *,
-    [data-testid="stTable"],
     [data-testid="stTable"] * {
-        background-color: #171c26 !important;
-        color: #f4f6fb !important;
-        -webkit-text-fill-color: #f4f6fb !important;
-        border-color: rgba(255, 255, 255, 0.10) !important;
+        color: #2f3342 !important;
+        -webkit-text-fill-color: #2f3342 !important;
+        border-color: rgba(47, 51, 66, 0.12) !important;
+    }
+
+    [data-testid="stDataFrame"] canvas,
+    [data-testid="stDataFrame"] div[role="grid"],
+    [data-testid="stDataFrame"] div[role="row"],
+    [data-testid="stDataFrame"] div[role="columnheader"],
+    [data-testid="stDataFrame"] div[role="gridcell"] {
+        background-color: #ffffff !important;
+        color: #2f3342 !important;
+        -webkit-text-fill-color: #2f3342 !important;
     }
 
     /* Mantém a sidebar escura e consistente */
