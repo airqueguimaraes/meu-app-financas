@@ -795,6 +795,71 @@ section.main > div.block-container {
 }
 
 
+
+/* 4.5 Controle manual de faturas na Home */
+.home-invoices-summary {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 0.45rem !important;
+    margin: 0.75rem 0 0.25rem 0 !important;
+    padding-top: 0.8rem !important;
+    border-top: 1px solid rgba(38, 43, 53, 0.10) !important;
+}
+
+.home-invoices-summary-row {
+    display: flex !important;
+    align-items: baseline !important;
+    justify-content: space-between !important;
+    gap: 0.75rem !important;
+    color: #4b5563 !important;
+    font-size: 0.78rem !important;
+    line-height: 1.25 !important;
+}
+
+.home-invoices-summary-row strong {
+    color: #2f3140 !important;
+    font-size: 0.86rem !important;
+    font-weight: 800 !important;
+    white-space: nowrap !important;
+}
+
+.home-invoices-panel-title {
+    color: #2f3140 !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    margin-bottom: 0.1rem !important;
+}
+
+.home-invoices-panel-subtitle {
+    color: #6b7280 !important;
+    font-size: 0.74rem !important;
+    line-height: 1.35 !important;
+    margin-bottom: 0.45rem !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .home-invoices-summary {
+        border-top-color: rgba(255, 255, 255, 0.10) !important;
+    }
+
+    .home-invoices-summary-row {
+        color: #aeb6c5 !important;
+        -webkit-text-fill-color: #aeb6c5 !important;
+    }
+
+    .home-invoices-summary-row strong,
+    .home-invoices-panel-title {
+        color: #f5f7fb !important;
+        -webkit-text-fill-color: #f5f7fb !important;
+    }
+
+    .home-invoices-panel-subtitle {
+        color: #aeb6c5 !important;
+        -webkit-text-fill-color: #aeb6c5 !important;
+    }
+}
+
 /* 5. Remoção de bordas e focos laranjas em Inputs/Selects */
 div[data-baseweb="select"] > div {
     border-color: #b4b4b4 !important;
@@ -3576,6 +3641,282 @@ def render_bills_page(selected_month, selected_year):
                             st.error(f"Erro ao remover conta fixa: {err}")
 
 
+CARD_INVOICES_SHEET_NAME = "faturas_cartoes_mensais"
+CARD_INVOICES_HEADERS = ["card", "month", "year", "amount", "updated_at"]
+CARD_INVOICE_NAMES = [
+    "Nubank",
+    "Mercado Pago",
+    "Inter",
+    "Nu PJ",
+    "PicPay",
+    "Amazon Prime",
+    "Mei",
+]
+
+
+def get_or_create_card_invoices_worksheet():
+    try:
+        invoices_ws = google_sheets_retry(sh.worksheet, CARD_INVOICES_SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        invoices_ws = google_sheets_retry(
+            sh.add_worksheet,
+            title=CARD_INVOICES_SHEET_NAME,
+            rows=500,
+            cols=len(CARD_INVOICES_HEADERS),
+        )
+        google_sheets_retry(
+            invoices_ws.append_row,
+            CARD_INVOICES_HEADERS,
+            value_input_option="RAW",
+        )
+        return invoices_ws
+
+    try:
+        values = google_sheets_retry(invoices_ws.get_all_values)
+        if not values:
+            google_sheets_retry(
+                invoices_ws.append_row,
+                CARD_INVOICES_HEADERS,
+                value_input_option="RAW",
+            )
+        else:
+            current_headers = [clean_text(h) for h in values[0]]
+            if current_headers != CARD_INVOICES_HEADERS:
+                google_sheets_retry(
+                    invoices_ws.update,
+                    range_name="A1:E1",
+                    values=[CARD_INVOICES_HEADERS],
+                    value_input_option="RAW",
+                )
+    except Exception:
+        pass
+
+    return invoices_ws
+
+
+@st.cache_data(ttl=5)
+def load_monthly_card_invoices(selected_month, selected_year):
+    result = {card: 0.0 for card in CARD_INVOICE_NAMES}
+
+    try:
+        invoices_ws = get_or_create_card_invoices_worksheet()
+        raw_rows = google_sheets_retry(invoices_ws.get_all_values)
+
+        if len(raw_rows) <= 1:
+            return result
+
+        headers = [clean_text(h) for h in raw_rows[0]]
+        field_map = {
+            header: headers.index(header) if header in headers else idx
+            for idx, header in enumerate(CARD_INVOICES_HEADERS)
+        }
+
+        for row in raw_rows[1:]:
+            row = list(row)
+            while len(row) < len(CARD_INVOICES_HEADERS):
+                row.append("")
+
+            card = clean_text(row[field_map.get("card", 0)])
+            month = (
+                int(safe_float(row[field_map.get("month", 1)]))
+                if clean_text(row[field_map.get("month", 1)])
+                else 0
+            )
+            year = (
+                int(safe_float(row[field_map.get("year", 2)]))
+                if clean_text(row[field_map.get("year", 2)])
+                else 0
+            )
+
+            if (
+                card in result
+                and month == int(selected_month)
+                and year == int(selected_year)
+            ):
+                result[card] = safe_float(row[field_map.get("amount", 3)])
+
+        return result
+    except Exception as err:
+        st.error(f"Erro ao carregar faturas mensais dos cartões: {err}")
+        return result
+
+
+def save_monthly_card_invoices(selected_month, selected_year, invoice_values):
+    invoices_ws = get_or_create_card_invoices_worksheet()
+    raw_rows = google_sheets_retry(invoices_ws.get_all_values)
+
+    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else CARD_INVOICES_HEADERS
+    field_map = {
+        header: headers.index(header) if header in headers else idx
+        for idx, header in enumerate(CARD_INVOICES_HEADERS)
+    }
+
+    existing_rows = {}
+    for row_idx, row in enumerate(raw_rows[1:], start=2):
+        row = list(row)
+        while len(row) < len(CARD_INVOICES_HEADERS):
+            row.append("")
+
+        card = clean_text(row[field_map.get("card", 0)])
+        month = (
+            int(safe_float(row[field_map.get("month", 1)]))
+            if clean_text(row[field_map.get("month", 1)])
+            else 0
+        )
+        year = (
+            int(safe_float(row[field_map.get("year", 2)]))
+            if clean_text(row[field_map.get("year", 2)])
+            else 0
+        )
+
+        if (
+            card in CARD_INVOICE_NAMES
+            and month == int(selected_month)
+            and year == int(selected_year)
+        ):
+            existing_rows[card] = row_idx
+
+    updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    for card in CARD_INVOICE_NAMES:
+        amount = round(safe_float(invoice_values.get(card, 0)), 2)
+        row_values = [
+            card,
+            int(selected_month),
+            int(selected_year),
+            amount,
+            updated_at,
+        ]
+
+        if card in existing_rows:
+            row_idx = existing_rows[card]
+            google_sheets_retry(
+                invoices_ws.update,
+                range_name=f"A{row_idx}:E{row_idx}",
+                values=[row_values],
+                value_input_option="RAW",
+            )
+        else:
+            google_sheets_retry(
+                invoices_ws.append_row,
+                row_values,
+                value_input_option="RAW",
+            )
+
+    st.cache_data.clear()
+
+
+def parse_currency_text(value):
+    raw = clean_text(value).replace("R$", "").replace(" ", "")
+    if not raw:
+        return 0.0
+
+    if "," in raw and "." in raw:
+        raw = raw.replace(".", "")
+
+    raw = raw.replace(",", ".")
+    return float(raw)
+
+
+def get_fixed_bills_month_summary(selected_month, selected_year):
+    bills = load_fixed_bills()
+    active_bills = [bill for bill in bills if bill.get("active", True)]
+    statuses = load_fixed_bill_statuses(selected_month, selected_year)
+
+    total_fixed = sum(
+        safe_float(bill.get("amount", 0))
+        for bill in active_bills
+    )
+    remaining_fixed = sum(
+        safe_float(bill.get("amount", 0))
+        for bill in active_bills
+        if not statuses.get(bill.get("bill_id"), False)
+    )
+
+    return total_fixed, remaining_fixed
+
+
+def render_home_monthly_invoices_panel(selected_month, selected_year):
+    saved_values = load_monthly_card_invoices(selected_month, selected_year)
+
+    st.markdown(
+        '<div class="home-invoices-panel-title">Faturas do mês</div>'
+        '<div class="home-invoices-panel-subtitle">'
+        'Informe o valor atual de cada fatura. Você pode editar e atualizar sempre que precisar.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    input_values = {}
+    left_col, right_col = st.columns(2, gap="small")
+
+    for index, card in enumerate(CARD_INVOICE_NAMES):
+        target_col = left_col if index % 2 == 0 else right_col
+        with target_col:
+            input_values[card] = st.text_input(
+                card,
+                value=format_currency(saved_values.get(card, 0)).replace("R$ ", ""),
+                key=f"home_invoice_{selected_year}_{selected_month}_{card}",
+                label_visibility="visible",
+            )
+
+    parsed_values = {}
+    parse_error = None
+
+    for card, raw_value in input_values.items():
+        try:
+            parsed_values[card] = parse_currency_text(raw_value)
+        except ValueError:
+            parse_error = card
+            parsed_values[card] = 0.0
+
+    if st.button(
+        "Atualizar faturas do mês",
+        type="primary",
+        key=f"save_home_invoices_{selected_year}_{selected_month}",
+        use_container_width=True,
+    ):
+        if parse_error:
+            st.error(
+                f"Valor inválido em {parse_error}. Use apenas números, por exemplo: 1250,90."
+            )
+        else:
+            try:
+                save_monthly_card_invoices(
+                    selected_month,
+                    selected_year,
+                    parsed_values,
+                )
+                st.success("Faturas do mês atualizadas.")
+                st.rerun()
+            except Exception as err:
+                st.error(f"Erro ao atualizar faturas do mês: {err}")
+
+    total_invoices = sum(parsed_values.values())
+    total_fixed, remaining_fixed = get_fixed_bills_month_summary(
+        selected_month,
+        selected_year,
+    )
+
+    st.markdown(
+        '<div class="home-invoices-summary">'
+        '<div class="home-invoices-summary-row">'
+        '<span>Total de faturas deste mês</span>'
+        f'<strong>{html.escape(format_currency(total_invoices))}</strong>'
+        '</div>'
+        '<div class="home-invoices-summary-row">'
+        '<span>Contas fixas totais deste mês</span>'
+        f'<strong>{html.escape(format_currency(total_fixed))}</strong>'
+        '</div>'
+        '<div class="home-invoices-summary-row">'
+        '<span>Restante contas fixas</span>'
+        f'<strong>{html.escape(format_currency(remaining_fixed))}</strong>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def strip_accents(text):
     text = clean_text(text).lower()
     return "".join(
@@ -4510,6 +4851,10 @@ if page_key == "home":
                     st.error(f"Erro ao salvar na planilha: {err}")
 
     with history_col:
+        with st.container(border=True):
+            render_home_monthly_invoices_panel(selected_month, selected_year)
+
+        st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
         st.subheader("Histórico")
         history_search = st.text_input(
             "Pesquisar",
