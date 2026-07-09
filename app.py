@@ -14,6 +14,7 @@ import io
 import re
 import unicodedata
 import hashlib
+import calendar
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="collapsed")
@@ -668,7 +669,7 @@ section.main > div.block-container {
 
 .bills-summary-grid {
     display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 1rem !important;
     margin: 1.05rem 0 1.45rem 0 !important;
 }
@@ -733,6 +734,58 @@ section.main > div.block-container {
     font-size: 0.72rem !important;
     font-weight: 800 !important;
     margin-left: 0.35rem !important;
+}
+
+.bill-card.bill-card-paid {
+    background: #e7f6ed !important;
+    border-color: #7bc69a !important;
+    box-shadow: 0 12px 26px rgba(50, 134, 85, 0.10) !important;
+}
+
+.bill-card.bill-card-overdue {
+    background: #fde8e8 !important;
+    border-color: #ef8e8e !important;
+    box-shadow: 0 12px 26px rgba(185, 55, 55, 0.10) !important;
+}
+
+.bill-card.bill-card-due-soon {
+    background: #fff7d6 !important;
+    border-color: #e6bd42 !important;
+    box-shadow: 0 12px 26px rgba(194, 148, 23, 0.10) !important;
+}
+
+.bill-card.bill-card-pending {
+    background: #ffffff !important;
+}
+
+.bill-status-pill.bill-status-paid {
+    background: rgba(50, 134, 85, 0.16) !important;
+    color: #237044 !important;
+}
+
+.bill-status-pill.bill-status-overdue {
+    background: rgba(196, 55, 55, 0.14) !important;
+    color: #b4232b !important;
+}
+
+.bill-status-pill.bill-status-due-soon {
+    background: rgba(205, 155, 20, 0.18) !important;
+    color: #8a6500 !important;
+}
+
+.bill-status-pill.bill-status-pending {
+    background: rgba(107, 114, 128, 0.12) !important;
+    color: #4b5563 !important;
+}
+
+.bills-summary-card.bills-summary-remaining-zero {
+    background: #e7f6ed !important;
+    border-color: #7bc69a !important;
+}
+
+.bills-summary-card.bills-summary-remaining-open {
+    background: #fff7e8 !important;
+    border-color: #edc77f !important;
 }
 
 @media (max-width: 900px) {
@@ -1632,6 +1685,63 @@ st.markdown("""
         background: rgba(95, 208, 139, 0.16) !important;
         color: #72e19f !important;
         -webkit-text-fill-color: #72e19f !important;
+    }
+
+    .bill-card.bill-card-paid {
+        background: #173225 !important;
+        border-color: #3f9b67 !important;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    .bill-card.bill-card-overdue {
+        background: #3a2021 !important;
+        border-color: #a64f55 !important;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    .bill-card.bill-card-due-soon {
+        background: #3b3217 !important;
+        border-color: #b99735 !important;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22) !important;
+    }
+
+    .bill-card.bill-card-pending {
+        background: #171c26 !important;
+        border-color: rgba(255, 255, 255, 0.09) !important;
+    }
+
+    .bill-status-pill.bill-status-paid {
+        background: rgba(95, 208, 139, 0.18) !important;
+        color: #72e19f !important;
+        -webkit-text-fill-color: #72e19f !important;
+    }
+
+    .bill-status-pill.bill-status-overdue {
+        background: rgba(255, 115, 122, 0.18) !important;
+        color: #ff9a9f !important;
+        -webkit-text-fill-color: #ff9a9f !important;
+    }
+
+    .bill-status-pill.bill-status-due-soon {
+        background: rgba(237, 193, 67, 0.18) !important;
+        color: #f1cf67 !important;
+        -webkit-text-fill-color: #f1cf67 !important;
+    }
+
+    .bill-status-pill.bill-status-pending {
+        background: rgba(174, 182, 197, 0.14) !important;
+        color: #cbd2df !important;
+        -webkit-text-fill-color: #cbd2df !important;
+    }
+
+    .bills-summary-card.bills-summary-remaining-zero {
+        background: #173225 !important;
+        border-color: #3f9b67 !important;
+    }
+
+    .bills-summary-card.bills-summary-remaining-open {
+        background: #302a1e !important;
+        border-color: #8a7130 !important;
     }
 
     .import-note-box,
@@ -2953,13 +3063,27 @@ def should_record_appear_in_home(record, app_start_date):
         return False
 
 BILLS_SHEET_NAME = "contas_assinaturas"
-BILLS_HEADERS = ["name", "category", "amount", "due_day", "payment_method", "notes", "active", "created_at"]
+BILLS_HEADERS = ["name", "category", "amount", "due_day", "payment_method", "notes", "active", "created_at", "bill_id"]
+
+BILLS_STATUS_SHEET_NAME = "contas_assinaturas_status"
+BILLS_STATUS_HEADERS = ["bill_id", "month", "year", "paid", "paid_at"]
+
+
+def make_fixed_bill_id(name, created_at, row_idx=None):
+    seed = f"{clean_text(name)}|{clean_text(created_at)}|{row_idx or ''}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:18]
+
 
 def get_or_create_fixed_bills_worksheet():
     try:
         bills_ws = google_sheets_retry(sh.worksheet, BILLS_SHEET_NAME)
     except gspread.exceptions.WorksheetNotFound:
-        bills_ws = google_sheets_retry(sh.add_worksheet, title=BILLS_SHEET_NAME, rows=200, cols=len(BILLS_HEADERS))
+        bills_ws = google_sheets_retry(
+            sh.add_worksheet,
+            title=BILLS_SHEET_NAME,
+            rows=200,
+            cols=len(BILLS_HEADERS),
+        )
         google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
         return bills_ws
 
@@ -2967,15 +3091,63 @@ def get_or_create_fixed_bills_worksheet():
         values = google_sheets_retry(bills_ws.get_all_values)
         if not values:
             google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
-        else:
-            current_headers = [clean_text(h) for h in values[0]]
-            missing_headers = [h for h in BILLS_HEADERS if h not in current_headers]
-            if missing_headers:
-                # Mantém compatibilidade caso a aba tenha sido criada manualmente com colunas incompletas.
-                google_sheets_retry(bills_ws.update, range_name="A1:H1", values=[BILLS_HEADERS], value_input_option="RAW")
+            return bills_ws
+
+        current_headers = [clean_text(h) for h in values[0]]
+        if current_headers != BILLS_HEADERS:
+            google_sheets_retry(
+                bills_ws.update,
+                range_name="A1:I1",
+                values=[BILLS_HEADERS],
+                value_input_option="RAW",
+            )
+
+        # Gera um ID estável para contas já existentes sem mexer nos dados atuais.
+        for row_idx, row in enumerate(values[1:], start=2):
+            padded = list(row) + [""] * max(0, len(BILLS_HEADERS) - len(row))
+            name = clean_text(padded[0])
+            created_at = clean_text(padded[7])
+            current_bill_id = clean_text(padded[8])
+            if name and not current_bill_id:
+                bill_id = make_fixed_bill_id(name, created_at, row_idx)
+                google_sheets_retry(bills_ws.update_cell, row_idx, 9, bill_id)
     except Exception:
         pass
+
     return bills_ws
+
+
+def get_or_create_fixed_bills_status_worksheet():
+    try:
+        status_ws = google_sheets_retry(sh.worksheet, BILLS_STATUS_SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        status_ws = google_sheets_retry(
+            sh.add_worksheet,
+            title=BILLS_STATUS_SHEET_NAME,
+            rows=500,
+            cols=len(BILLS_STATUS_HEADERS),
+        )
+        google_sheets_retry(status_ws.append_row, BILLS_STATUS_HEADERS, value_input_option="RAW")
+        return status_ws
+
+    try:
+        values = google_sheets_retry(status_ws.get_all_values)
+        if not values:
+            google_sheets_retry(status_ws.append_row, BILLS_STATUS_HEADERS, value_input_option="RAW")
+        else:
+            current_headers = [clean_text(h) for h in values[0]]
+            if current_headers != BILLS_STATUS_HEADERS:
+                google_sheets_retry(
+                    status_ws.update,
+                    range_name="A1:E1",
+                    values=[BILLS_STATUS_HEADERS],
+                    value_input_option="RAW",
+                )
+    except Exception:
+        pass
+
+    return status_ws
+
 
 @st.cache_data(ttl=5)
 def load_fixed_bills():
@@ -2987,22 +3159,33 @@ def load_fixed_bills():
 
         headers = [clean_text(h) for h in raw_rows[0]]
         records_list = []
-        field_map = {header: headers.index(header) if header in headers else idx for idx, header in enumerate(BILLS_HEADERS)}
+        field_map = {
+            header: headers.index(header) if header in headers else idx
+            for idx, header in enumerate(BILLS_HEADERS)
+        }
 
         for idx, row in enumerate(raw_rows[1:], start=2):
+            row = list(row)
             while len(row) < len(BILLS_HEADERS):
                 row.append("")
 
+            name = clean_text(row[field_map.get("name", 0)])
+            created_at = clean_text(row[field_map.get("created_at", 7)])
+            bill_id = clean_text(row[field_map.get("bill_id", 8)]) or make_fixed_bill_id(name, created_at, idx)
+
             record = {
                 "sheet_row_idx": idx,
-                "name": clean_text(row[field_map.get("name", 0)]),
+                "bill_id": bill_id,
+                "name": name,
                 "category": clean_text(row[field_map.get("category", 1)]),
                 "amount": safe_float(row[field_map.get("amount", 2)]),
-                "due_day": int(safe_float(row[field_map.get("due_day", 3)])) if clean_text(row[field_map.get("due_day", 3)]) else 1,
+                "due_day": int(safe_float(row[field_map.get("due_day", 3)]))
+                if clean_text(row[field_map.get("due_day", 3)])
+                else 1,
                 "payment_method": clean_text(row[field_map.get("payment_method", 4)]),
                 "notes": clean_text(row[field_map.get("notes", 5)]),
                 "active": clean_text(row[field_map.get("active", 6)]).upper() != "FALSE",
-                "created_at": clean_text(row[field_map.get("created_at", 7)]),
+                "created_at": created_at,
             }
 
             if record["name"]:
@@ -3013,40 +3196,218 @@ def load_fixed_bills():
         st.error(f"Erro ao carregar contas e assinaturas: {e}")
         return []
 
+
+@st.cache_data(ttl=5)
+def load_fixed_bill_statuses(selected_month, selected_year):
+    try:
+        status_ws = get_or_create_fixed_bills_status_worksheet()
+        raw_rows = google_sheets_retry(status_ws.get_all_values)
+        if len(raw_rows) <= 1:
+            return {}
+
+        headers = [clean_text(h) for h in raw_rows[0]]
+        field_map = {
+            header: headers.index(header) if header in headers else idx
+            for idx, header in enumerate(BILLS_STATUS_HEADERS)
+        }
+
+        statuses = {}
+        for row in raw_rows[1:]:
+            row = list(row)
+            while len(row) < len(BILLS_STATUS_HEADERS):
+                row.append("")
+
+            month = int(safe_float(row[field_map.get("month", 1)])) if clean_text(row[field_map.get("month", 1)]) else 0
+            year = int(safe_float(row[field_map.get("year", 2)])) if clean_text(row[field_map.get("year", 2)]) else 0
+
+            if month == int(selected_month) and year == int(selected_year):
+                bill_id = clean_text(row[field_map.get("bill_id", 0)])
+                if bill_id:
+                    statuses[bill_id] = is_true_value(row[field_map.get("paid", 3)])
+
+        return statuses
+    except Exception as e:
+        st.error(f"Erro ao carregar status mensal das contas: {e}")
+        return {}
+
+
+def set_fixed_bill_paid_status(bill_id, selected_month, selected_year, paid):
+    status_ws = get_or_create_fixed_bills_status_worksheet()
+    raw_rows = google_sheets_retry(status_ws.get_all_values)
+
+    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else BILLS_STATUS_HEADERS
+    field_map = {
+        header: headers.index(header) if header in headers else idx
+        for idx, header in enumerate(BILLS_STATUS_HEADERS)
+    }
+
+    target_row_idx = None
+    for row_idx, row in enumerate(raw_rows[1:], start=2):
+        row = list(row)
+        while len(row) < len(BILLS_STATUS_HEADERS):
+            row.append("")
+
+        row_bill_id = clean_text(row[field_map.get("bill_id", 0)])
+        row_month = int(safe_float(row[field_map.get("month", 1)])) if clean_text(row[field_map.get("month", 1)]) else 0
+        row_year = int(safe_float(row[field_map.get("year", 2)])) if clean_text(row[field_map.get("year", 2)]) else 0
+
+        if (
+            row_bill_id == clean_text(bill_id)
+            and row_month == int(selected_month)
+            and row_year == int(selected_year)
+        ):
+            target_row_idx = row_idx
+            break
+
+    paid_value = "TRUE" if paid else "FALSE"
+    paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if paid else ""
+
+    if target_row_idx:
+        google_sheets_retry(
+            status_ws.update,
+            range_name=f"D{target_row_idx}:E{target_row_idx}",
+            values=[[paid_value, paid_at]],
+            value_input_option="RAW",
+        )
+    else:
+        google_sheets_retry(
+            status_ws.append_row,
+            [
+                clean_text(bill_id),
+                int(selected_month),
+                int(selected_year),
+                paid_value,
+                paid_at,
+            ],
+            value_input_option="RAW",
+        )
+
+    st.cache_data.clear()
+
+
+def delete_fixed_bill_statuses(bill_id):
+    try:
+        status_ws = get_or_create_fixed_bills_status_worksheet()
+        raw_rows = google_sheets_retry(status_ws.get_all_values)
+        rows_to_delete = []
+
+        for row_idx, row in enumerate(raw_rows[1:], start=2):
+            if row and clean_text(row[0]) == clean_text(bill_id):
+                rows_to_delete.append(row_idx)
+
+        for row_idx in sorted(rows_to_delete, reverse=True):
+            google_sheets_retry(status_ws.delete_rows, row_idx)
+    except Exception:
+        pass
+
+
+def get_bill_due_date(selected_month, selected_year, due_day):
+    due_day = max(1, min(31, int(due_day or 1)))
+    last_day = calendar.monthrange(int(selected_year), int(selected_month))[1]
+    return datetime(
+        int(selected_year),
+        int(selected_month),
+        min(due_day, last_day),
+    ).date()
+
+
+def get_bill_visual_status(bill, is_paid, selected_month, selected_year, today_date):
+    if is_paid:
+        return "paid", "Pago", "bill-card-paid", "bill-status-paid"
+
+    due_date = get_bill_due_date(
+        selected_month,
+        selected_year,
+        bill.get("due_day", 1),
+    )
+    days_until_due = (due_date - today_date).days
+
+    if days_until_due < 0:
+        return "overdue", "Vencida", "bill-card-overdue", "bill-status-overdue"
+
+    if days_until_due <= 2:
+        if days_until_due == 0:
+            label = "Vence hoje"
+        elif days_until_due == 1:
+            label = "Vence amanhã"
+        else:
+            label = "Vence em 2 dias"
+        return "due_soon", label, "bill-card-due-soon", "bill-status-due-soon"
+
+    return "pending", "Não pago", "bill-card-pending", "bill-status-pending"
+
+
 def render_bills_page(selected_month, selected_year):
     st.markdown("# Contas e assinaturas")
     st.markdown(
         '<div class="page-kicker">Cadastre pagamentos mensais fixos, como aluguel, carro, empréstimos, luz, água, internet, celular e assinaturas.</div>',
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     bills = load_fixed_bills()
     active_bills = [bill for bill in bills if bill.get("active", True)]
+    monthly_statuses = load_fixed_bill_statuses(selected_month, selected_year)
+
     total_monthly = sum(safe_float(bill.get("amount", 0)) for bill in active_bills)
+    remaining_monthly = sum(
+        safe_float(bill.get("amount", 0))
+        for bill in active_bills
+        if not monthly_statuses.get(bill.get("bill_id"), False)
+    )
     total_count = len(active_bills)
 
-    today = datetime.now()
-    upcoming_bills = []
-    for bill in active_bills:
-        due_day = max(1, min(31, int(bill.get("due_day", 1) or 1)))
-        if selected_month == today.month and selected_year == today.year:
-            days_until_due = due_day - today.day
-            if 0 <= days_until_due <= 7:
-                upcoming_bills.append(bill)
-        else:
-            upcoming_bills.append(bill)
+    today_date = datetime.now().date()
 
-    next_due_text = "Sem vencimentos próximos"
-    if upcoming_bills:
-        next_bill = sorted(upcoming_bills, key=lambda b: int(b.get("due_day", 1) or 1))[0]
-        next_due_text = f'{next_bill.get("name", "Conta")} — dia {int(next_bill.get("due_day", 1)):02d}'
+    unpaid_bills = [
+        bill
+        for bill in active_bills
+        if not monthly_statuses.get(bill.get("bill_id"), False)
+    ]
+
+    next_due_text = "Tudo pago neste mês" if active_bills and not unpaid_bills else "Sem vencimentos próximos"
+    if unpaid_bills:
+        next_bill = sorted(
+            unpaid_bills,
+            key=lambda bill: get_bill_due_date(
+                selected_month,
+                selected_year,
+                bill.get("due_day", 1),
+            ),
+        )[0]
+        next_due_text = (
+            f'{next_bill.get("name", "Conta")} — dia '
+            f'{int(next_bill.get("due_day", 1) or 1):02d}'
+        )
+
+    remaining_summary_class = (
+        "bills-summary-remaining-zero"
+        if remaining_monthly <= 0.00001
+        else "bills-summary-remaining-open"
+    )
 
     summary_html = (
         '<div class="bills-summary-grid">'
-        '<div class="bills-summary-card"><div class="bills-summary-label">Total mensal fixo</div><div class="bills-summary-value">' + html.escape(format_currency(total_monthly)) + '</div></div>'
-        '<div class="bills-summary-card"><div class="bills-summary-label">Contas ativas</div><div class="bills-summary-value">' + str(total_count) + '</div></div>'
-        '<div class="bills-summary-card"><div class="bills-summary-label">Próximo vencimento</div><div class="bills-summary-value" style="font-size: clamp(1rem, 1.35vw, 1.35rem);">' + html.escape(next_due_text) + '</div></div>'
-        '</div>'
+        '<div class="bills-summary-card">'
+        '<div class="bills-summary-label">Total mensal fixo</div>'
+        '<div class="bills-summary-value">'
+        + html.escape(format_currency(total_monthly))
+        + "</div></div>"
+        f'<div class="bills-summary-card {remaining_summary_class}">'
+        '<div class="bills-summary-label">Restante a pagar desse mês</div>'
+        '<div class="bills-summary-value">'
+        + html.escape(format_currency(remaining_monthly))
+        + "</div></div>"
+        '<div class="bills-summary-card">'
+        '<div class="bills-summary-label">Contas ativas</div>'
+        '<div class="bills-summary-value">'
+        + str(total_count)
+        + "</div></div>"
+        '<div class="bills-summary-card">'
+        '<div class="bills-summary-label">Próximo vencimento</div>'
+        '<div class="bills-summary-value" style="font-size: clamp(1rem, 1.35vw, 1.35rem);">'
+        + html.escape(next_due_text)
+        + "</div></div>"
+        "</div>"
     )
     st.markdown(summary_html, unsafe_allow_html=True)
 
@@ -3057,16 +3418,25 @@ def render_bills_page(selected_month, selected_year):
         bill_name = st.text_input("Nome", placeholder="Ex: Aluguel, Internet, Parcela do carro")
         bill_category = st.selectbox(
             "Categoria",
-            ["Moradia", "Transporte", "Empréstimos", "Luz", "Água", "Internet", "Celular", "Assinatura", "Outros"]
+            ["Moradia", "Transporte", "Empréstimos", "Luz", "Água", "Internet", "Celular", "Assinatura", "Outros"],
         )
         amount_col, due_col = st.columns(2)
         bill_amount_str = amount_col.text_input("Valor mensal (R$)", placeholder="Ex: 120,00")
-        bill_due_day = due_col.number_input("Dia de vencimento", min_value=1, max_value=31, value=10, step=1)
+        bill_due_day = due_col.number_input(
+            "Dia de vencimento",
+            min_value=1,
+            max_value=31,
+            value=10,
+            step=1,
+        )
         bill_payment_method = st.selectbox(
             "Forma de pagamento",
-            ["Pix", "Débito", "Boleto", "Cartão de crédito", "Transferência", "Dinheiro", "Outro"]
+            ["Pix", "Débito", "Boleto", "Cartão de crédito", "Transferência", "Dinheiro", "Outro"],
         )
-        bill_notes = st.text_area("Observações", placeholder="Ex: vence todo mês, contrato, detalhes do plano...")
+        bill_notes = st.text_area(
+            "Observações",
+            placeholder="Ex: vence todo mês, contrato, detalhes do plano...",
+        )
 
         if st.button("Adicionar conta fixa", type="primary"):
             if not bill_name.strip():
@@ -3088,6 +3458,12 @@ def render_bills_page(selected_month, selected_year):
 
             try:
                 bills_ws = get_or_create_fixed_bills_worksheet()
+                created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                bill_id = make_fixed_bill_id(
+                    bill_name.strip(),
+                    created_at,
+                    f"{time.time_ns()}",
+                )
                 new_bill_row = [
                     bill_name.strip(),
                     bill_category,
@@ -3096,9 +3472,14 @@ def render_bills_page(selected_month, selected_year):
                     bill_payment_method,
                     bill_notes,
                     "TRUE",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    created_at,
+                    bill_id,
                 ]
-                google_sheets_retry(bills_ws.append_row, new_bill_row, value_input_option="RAW")
+                google_sheets_retry(
+                    bills_ws.append_row,
+                    new_bill_row,
+                    value_input_option="RAW",
+                )
                 st.cache_data.clear()
                 st.success("Conta fixa adicionada.")
                 st.rerun()
@@ -3110,9 +3491,27 @@ def render_bills_page(selected_month, selected_year):
         if not active_bills:
             st.info("Nenhuma conta ou assinatura cadastrada ainda.")
         else:
-            sorted_bills = sorted(active_bills, key=lambda b: (int(b.get("due_day", 1) or 1), b.get("name", "")))
+            sorted_bills = sorted(
+                active_bills,
+                key=lambda b: (
+                    int(b.get("due_day", 1) or 1),
+                    b.get("name", ""),
+                ),
+            )
+
             for bill in sorted_bills:
                 due_day = int(bill.get("due_day", 1) or 1)
+                bill_id = bill.get("bill_id")
+                is_paid = monthly_statuses.get(bill_id, False)
+
+                _, status_label, card_class, pill_class = get_bill_visual_status(
+                    bill,
+                    is_paid,
+                    selected_month,
+                    selected_year,
+                    today_date,
+                )
+
                 name = html.escape(bill.get("name", "Conta"))
                 category = html.escape(bill.get("category", "Outros"))
                 method = html.escape(bill.get("payment_method", ""))
@@ -3120,23 +3519,61 @@ def render_bills_page(selected_month, selected_year):
                 amount = html.escape(format_currency(safe_float(bill.get("amount", 0))))
 
                 st.markdown(
-                    '<div class="bill-card">'
-                    f'<div class="bill-card-title">{name}<span class="bill-status-pill">Ativa</span></div>'
+                    f'<div class="bill-card {card_class}">'
+                    f'<div class="bill-card-title">{name}'
+                    f'<span class="bill-status-pill {pill_class}">{html.escape(status_label)}</span>'
+                    "</div>"
                     f'<div class="bill-card-meta">{category} | Vence dia {due_day:02d} | {method}</div>'
                     f'<div class="bill-card-value">{amount}</div>'
-                    + (f'<div class="bill-card-meta" style="margin-top:0.55rem;">{notes}</div>' if notes else '')
-                    + '</div>',
-                    unsafe_allow_html=True
+                    + (
+                        f'<div class="bill-card-meta" style="margin-top:0.55rem;">{notes}</div>'
+                        if notes
+                        else ""
+                    )
+                    + "</div>",
+                    unsafe_allow_html=True,
                 )
 
-                if st.button("🗑️ Remover", key=f"remove_bill_{bill['sheet_row_idx']}"):
-                    try:
-                        bills_ws = get_or_create_fixed_bills_worksheet()
-                        google_sheets_retry(bills_ws.delete_rows, bill["sheet_row_idx"])
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as err:
-                        st.error(f"Erro ao remover conta fixa: {err}")
+                status_col, remove_col = st.columns([0.68, 0.32])
+                with status_col:
+                    status_button_label = (
+                        "↩️ Marcar como não pago"
+                        if is_paid
+                        else "✅ Marcar como pago"
+                    )
+                    if st.button(
+                        status_button_label,
+                        key=f"toggle_bill_paid_{bill_id}_{selected_year}_{selected_month}",
+                        use_container_width=True,
+                    ):
+                        try:
+                            set_fixed_bill_paid_status(
+                                bill_id,
+                                selected_month,
+                                selected_year,
+                                not is_paid,
+                            )
+                            st.rerun()
+                        except Exception as err:
+                            st.error(f"Erro ao atualizar o status da conta: {err}")
+
+                with remove_col:
+                    if st.button(
+                        "🗑️ Remover",
+                        key=f"remove_bill_{bill['sheet_row_idx']}",
+                        use_container_width=True,
+                    ):
+                        try:
+                            bills_ws = get_or_create_fixed_bills_worksheet()
+                            google_sheets_retry(
+                                bills_ws.delete_rows,
+                                bill["sheet_row_idx"],
+                            )
+                            delete_fixed_bill_statuses(bill_id)
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as err:
+                            st.error(f"Erro ao remover conta fixa: {err}")
 
 
 def strip_accents(text):
