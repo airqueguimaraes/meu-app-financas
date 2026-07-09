@@ -838,6 +838,46 @@ section.main > div.block-container {
     margin-bottom: 0.45rem !important;
 }
 
+
+.home-invoice-card-label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    min-height: 1.55rem !important;
+    color: #2f3140 !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+}
+
+.home-invoice-paid-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0.08rem 0.35rem !important;
+    border-radius: 999px !important;
+    background: #dff4e7 !important;
+    color: #237044 !important;
+    font-size: 0.56rem !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.02em !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .home-invoice-card-label {
+        color: #f5f7fb !important;
+        -webkit-text-fill-color: #f5f7fb !important;
+    }
+
+    .home-invoice-paid-badge {
+        background: rgba(95, 208, 139, 0.18) !important;
+        color: #72e19f !important;
+        -webkit-text-fill-color: #72e19f !important;
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     .home-invoices-summary {
         border-top-color: rgba(255, 255, 255, 0.10) !important;
@@ -3642,7 +3682,7 @@ def render_bills_page(selected_month, selected_year):
 
 
 CARD_INVOICES_SHEET_NAME = "faturas_cartoes_mensais"
-CARD_INVOICES_HEADERS = ["card", "month", "year", "amount", "updated_at"]
+CARD_INVOICES_HEADERS = ["card", "month", "year", "amount", "updated_at", "paid", "paid_at"]
 CARD_INVOICE_NAMES = [
     "Nubank",
     "Mercado Pago",
@@ -3684,7 +3724,7 @@ def get_or_create_card_invoices_worksheet():
             if current_headers != CARD_INVOICES_HEADERS:
                 google_sheets_retry(
                     invoices_ws.update,
-                    range_name="A1:E1",
+                    range_name="A1:G1",
                     values=[CARD_INVOICES_HEADERS],
                     value_input_option="RAW",
                 )
@@ -3739,6 +3779,139 @@ def load_monthly_card_invoices(selected_month, selected_year):
     except Exception as err:
         st.error(f"Erro ao carregar faturas mensais dos cartões: {err}")
         return result
+
+
+
+@st.cache_data(ttl=5)
+def load_monthly_card_invoice_statuses(selected_month, selected_year):
+    result = {card: False for card in CARD_INVOICE_NAMES}
+
+    try:
+        invoices_ws = get_or_create_card_invoices_worksheet()
+        raw_rows = google_sheets_retry(invoices_ws.get_all_values)
+
+        if len(raw_rows) <= 1:
+            return result
+
+        headers = [clean_text(h) for h in raw_rows[0]]
+        field_map = {
+            header: headers.index(header) if header in headers else idx
+            for idx, header in enumerate(CARD_INVOICES_HEADERS)
+        }
+
+        for row in raw_rows[1:]:
+            row = list(row)
+            while len(row) < len(CARD_INVOICES_HEADERS):
+                row.append("")
+
+            card = clean_text(row[field_map.get("card", 0)])
+            month = (
+                int(safe_float(row[field_map.get("month", 1)]))
+                if clean_text(row[field_map.get("month", 1)])
+                else 0
+            )
+            year = (
+                int(safe_float(row[field_map.get("year", 2)]))
+                if clean_text(row[field_map.get("year", 2)])
+                else 0
+            )
+
+            if (
+                card in result
+                and month == int(selected_month)
+                and year == int(selected_year)
+            ):
+                result[card] = is_true_value(row[field_map.get("paid", 5)])
+
+        return result
+    except Exception as err:
+        st.error(f"Erro ao carregar status das faturas mensais: {err}")
+        return result
+
+
+def set_monthly_card_invoice_paid_status(
+    card,
+    selected_month,
+    selected_year,
+    paid,
+):
+    invoices_ws = get_or_create_card_invoices_worksheet()
+    raw_rows = google_sheets_retry(invoices_ws.get_all_values)
+
+    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else CARD_INVOICES_HEADERS
+    field_map = {
+        header: headers.index(header) if header in headers else idx
+        for idx, header in enumerate(CARD_INVOICES_HEADERS)
+    }
+
+    target_row_idx = None
+
+    for row_idx, row in enumerate(raw_rows[1:], start=2):
+        row = list(row)
+        while len(row) < len(CARD_INVOICES_HEADERS):
+            row.append("")
+
+        row_card = clean_text(row[field_map.get("card", 0)])
+        row_month = (
+            int(safe_float(row[field_map.get("month", 1)]))
+            if clean_text(row[field_map.get("month", 1)])
+            else 0
+        )
+        row_year = (
+            int(safe_float(row[field_map.get("year", 2)]))
+            if clean_text(row[field_map.get("year", 2)])
+            else 0
+        )
+
+        if (
+            row_card == clean_text(card)
+            and row_month == int(selected_month)
+            and row_year == int(selected_year)
+        ):
+            target_row_idx = row_idx
+            break
+
+    paid_value = "TRUE" if paid else "FALSE"
+    paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if paid else ""
+    updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if target_row_idx:
+        google_sheets_retry(
+            invoices_ws.update,
+            range_name=f"E{target_row_idx}:G{target_row_idx}",
+            values=[[updated_at, paid_value, paid_at]],
+            value_input_option="RAW",
+        )
+    else:
+        google_sheets_retry(
+            invoices_ws.append_row,
+            [
+                clean_text(card),
+                int(selected_month),
+                int(selected_year),
+                0.0,
+                updated_at,
+                paid_value,
+                paid_at,
+            ],
+            value_input_option="RAW",
+        )
+
+    st.cache_data.clear()
+
+
+def handle_monthly_card_paid_toggle(
+    card,
+    selected_month,
+    selected_year,
+    checkbox_key,
+):
+    set_monthly_card_invoice_paid_status(
+        card,
+        selected_month,
+        selected_year,
+        bool(st.session_state.get(checkbox_key, False)),
+    )
 
 
 def save_monthly_card_invoices(selected_month, selected_year, invoice_values):
@@ -3799,7 +3972,7 @@ def save_monthly_card_invoices(selected_month, selected_year, invoice_values):
         else:
             google_sheets_retry(
                 invoices_ws.append_row,
-                row_values,
+                row_values + ["FALSE", ""],
                 value_input_option="RAW",
             )
 
@@ -3838,6 +4011,10 @@ def get_fixed_bills_month_summary(selected_month, selected_year):
 
 def render_home_monthly_invoices_panel(selected_month, selected_year):
     saved_values = load_monthly_card_invoices(selected_month, selected_year)
+    saved_statuses = load_monthly_card_invoice_statuses(
+        selected_month,
+        selected_year,
+    )
 
     st.markdown(
         '<div class="home-invoices-panel-title">Faturas do mês</div>'
@@ -3848,16 +4025,58 @@ def render_home_monthly_invoices_panel(selected_month, selected_year):
     )
 
     input_values = {}
+    paid_values = {}
+
     left_col, right_col = st.columns(2, gap="small")
 
     for index, card in enumerate(CARD_INVOICE_NAMES):
         target_col = left_col if index % 2 == 0 else right_col
+
         with target_col:
+            checkbox_key = (
+                f"home_invoice_paid_{selected_year}_{selected_month}_{card}"
+            )
+
+            label_col, checkbox_col = st.columns(
+                [0.82, 0.18],
+                gap="small",
+                vertical_alignment="center",
+            )
+
+            with label_col:
+                paid_badge = (
+                    '<span class="home-invoice-paid-badge">Pago</span>'
+                    if saved_statuses.get(card, False)
+                    else ""
+                )
+                st.markdown(
+                    f'<div class="home-invoice-card-label">'
+                    f'{html.escape(card)}{paid_badge}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            with checkbox_col:
+                paid_values[card] = st.checkbox(
+                    "Pago",
+                    value=saved_statuses.get(card, False),
+                    key=checkbox_key,
+                    label_visibility="collapsed",
+                    help=f"Marcar a fatura {card} como paga neste mês",
+                    on_change=handle_monthly_card_paid_toggle,
+                    args=(
+                        card,
+                        selected_month,
+                        selected_year,
+                        checkbox_key,
+                    ),
+                )
+
             input_values[card] = st.text_input(
                 card,
                 value=format_currency(saved_values.get(card, 0)).replace("R$ ", ""),
                 key=f"home_invoice_{selected_year}_{selected_month}_{card}",
-                label_visibility="visible",
+                label_visibility="collapsed",
             )
 
     parsed_values = {}
@@ -3893,6 +4112,12 @@ def render_home_monthly_invoices_panel(selected_month, selected_year):
                 st.error(f"Erro ao atualizar faturas do mês: {err}")
 
     total_invoices = sum(parsed_values.values())
+    remaining_invoices = sum(
+        parsed_values.get(card, 0.0)
+        for card in CARD_INVOICE_NAMES
+        if not paid_values.get(card, False)
+    )
+
     total_fixed, remaining_fixed = get_fixed_bills_month_summary(
         selected_month,
         selected_year,
@@ -3903,6 +4128,10 @@ def render_home_monthly_invoices_panel(selected_month, selected_year):
         '<div class="home-invoices-summary-row">'
         '<span>Total de faturas deste mês</span>'
         f'<strong>{html.escape(format_currency(total_invoices))}</strong>'
+        '</div>'
+        '<div class="home-invoices-summary-row">'
+        '<span>Restante faturas</span>'
+        f'<strong>{html.escape(format_currency(remaining_invoices))}</strong>'
         '</div>'
         '<div class="home-invoices-summary-row">'
         '<span>Contas fixas totais deste mês</span>'
