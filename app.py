@@ -2741,7 +2741,7 @@ class SupabaseWorksheetAdapter:
         existing = existing or {}
 
         if self.logical_name == "transactions":
-            parsed_date = pd.to_datetime(data.get("created_at"), errors="coerce")
+            parsed_date = parse_business_date(data.get("created_at"))
             if pd.isna(parsed_date):
                 parsed_date = pd.Timestamp.now()
             installments = max(1, int(float(data.get("installments") or 1)))
@@ -4655,6 +4655,30 @@ def read_uploaded_csv(uploaded_file):
 
     raise ValueError(f"Não foi possível ler o CSV. Último erro: {last_error}")
 
+
+def parse_business_date(value, fallback=None):
+    """
+    Interpreta datas sem trocar dia e mês.
+    - ISO: YYYY-MM-DD / YYYY-MM-DD HH:MM:SS -> força padrão ISO.
+    - Outros formatos: interpreta como dia primeiro (DD/MM/AAAA).
+    """
+    if isinstance(value, pd.Timestamp):
+        return value
+    if isinstance(value, datetime):
+        return pd.Timestamp(value)
+
+    cleaned = clean_text(value)
+    if not cleaned:
+        return pd.Timestamp(fallback) if fallback is not None else pd.NaT
+
+    try:
+        if re.match(r"^\d{4}-\d{2}-\d{2}(?:[ T].*)?$", cleaned):
+            return pd.to_datetime(cleaned, yearfirst=True, dayfirst=False, errors="raise")
+        return pd.to_datetime(cleaned, dayfirst=True, errors="raise")
+    except Exception:
+        return pd.Timestamp(fallback) if fallback is not None else pd.NaT
+
+
 def guess_column(columns, candidates):
     normalized = {col: strip_accents(col) for col in columns}
     for candidate in candidates:
@@ -4666,7 +4690,12 @@ def guess_column(columns, candidates):
 
 def build_duplicate_key(date_value, description, amount, payment_method, card):
     try:
-        parsed_date = pd.to_datetime(date_value).strftime("%Y-%m-%d")
+        parsed_date_obj = parse_business_date(date_value)
+        parsed_date = (
+            parsed_date_obj.strftime("%Y-%m-%d")
+            if not pd.isna(parsed_date_obj)
+            else clean_text(date_value)[:10]
+        )
     except Exception:
         parsed_date = clean_text(date_value)[:10]
 
@@ -4937,9 +4966,10 @@ def render_import_csv_page(selected_month, selected_year, records):
         if not raw_desc and raw_amount == 0:
             continue
 
-        parsed_date = pd.to_datetime(raw_date, dayfirst=True, errors="coerce")
-        if pd.isna(parsed_date):
-            parsed_date = datetime(selected_year, selected_month, 1)
+        parsed_date = parse_business_date(
+            raw_date,
+            fallback=datetime(selected_year, selected_month, 1),
+        )
 
         amount_abs = abs(raw_amount)
         if amount_abs == 0:
