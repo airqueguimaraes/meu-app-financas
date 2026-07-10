@@ -15,6 +15,11 @@ import re
 import unicodedata
 import hashlib
 import calendar
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
+from zoneinfo import ZoneInfo
 
 # Configuração da página
 st.set_page_config(page_title="Meu App Finanças", layout="wide", initial_sidebar_state="collapsed")
@@ -4659,6 +4664,543 @@ def render_import_csv_page(selected_month, selected_year, records):
             import_status_placeholder.empty()
             st.error(f"Erro ao importar transações: {err}")
 
+
+# =========================================================
+# MIGRAÇÃO CONTROLADA: GOOGLE SHEETS -> SUPABASE
+# Esta página é temporária e serve apenas para a ETAPA 2.
+# =========================================================
+
+SUPABASE_TABLES = [
+    "transactions",
+    "app_config",
+    "fixed_bills",
+    "fixed_bill_status",
+    "card_invoices",
+    "import_batches",
+]
+
+
+def get_supabase_migration_secrets():
+    try:
+        url = clean_text(st.secrets.get("SUPABASE_URL", "")).rstrip("/")
+        secret_key = clean_text(st.secrets.get("SUPABASE_SECRET_KEY", ""))
+    except Exception:
+        url = ""
+        secret_key = ""
+    return url, secret_key
+
+
+def supabase_rest_request(method, table, params=None, payload=None, prefer=None):
+    supabase_url, secret_key = get_supabase_migration_secrets()
+    if not supabase_url or not secret_key:
+        raise RuntimeError(
+            "SUPABASE_URL ou SUPABASE_SECRET_KEY não foram encontrados nos Secrets do Streamlit."
+        )
+
+    query = ""
+    if params:
+        query = "?" + urllib.parse.urlencode(params, doseq=True, safe="*,()")
+
+    endpoint = f"{supabase_url}/rest/v1/{table}{query}"
+    headers = {
+        "apikey": secret_key,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+
+    # Chaves legadas service_role são JWTs e usam Bearer.
+    # As novas sb_secret_* são API keys opacas e vão no header apikey.
+    if not secret_key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {secret_key}"
+
+    if prefer:
+        headers["Prefer"] = prefer
+
+    data = None
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    request = urllib.request.Request(
+        endpoint,
+        data=data,
+        headers=headers,
+        method=method.upper(),
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            body = response.read().decode("utf-8")
+            if not body:
+                return []
+            return json.loads(body)
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Supabase retornou HTTP {err.code} em {table}: {detail}"
+        ) from err
+    except urllib.error.URLError as err:
+        raise RuntimeError(f"Não foi possível conectar ao Supabase: {err}") from err
+
+
+def supabase_select_rows(table, columns="*", limit=1000):
+    return supabase_rest_request(
+        "GET",
+        table,
+        params={"select": columns, "limit": int(limit)},
+    )
+
+
+def supabase_insert_rows(table, rows, chunk_size=100):
+    if not rows:
+        return []
+
+    inserted = []
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start:start + chunk_size]
+        result = supabase_rest_request(
+            "POST",
+            table,
+            payload=chunk,
+            prefer="return=representation",
+        )
+        inserted.extend(result or [])
+    return inserted
+
+
+def parse_migration_datetime(value, default_now=True):
+    cleaned = clean_text(value)
+    if not cleaned:
+        return datetime.now(ZoneInfo("America/Sao_Paulo")) if default_now else None
+
+    parsed = pd.to_datetime(cleaned, dayfirst=True, errors="coerce")
+    if pd.isna(parsed):
+        parsed = pd.to_datetime(cleaned, dayfirst=False, errors="coerce")
+    if pd.isna(parsed):
+        return datetime.now(ZoneInfo("America/Sao_Paulo")) if default_now else None
+
+    if isinstance(parsed, pd.Timestamp):
+        parsed = parsed.to_pydatetime()
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+    return parsed
+
+
+def migration_datetime_iso(value, default_now=True):
+    parsed = parse_migration_datetime(value, default_now=default_now)
+    return parsed.isoformat() if parsed else None
+
+
+def clean_tags_for_supabase(value):
+    raw = clean_text(value)
+    if not raw:
+        return []
+
+    tags = []
+    seen = set()
+    for part in raw.split(","):
+        tag = clean_text(part).lstrip("#")
+        if tag and tag.lower() not in seen:
+            seen.add(tag.lower())
+            tags.append(tag)
+    return tags
+
+
+def source_fixed_bill_status_rows():
+    try:
+        status_ws = google_sheets_retry(sh.worksheet, BILLS_STATUS_SHEET_NAME)
+        raw_rows = google_sheets_retry(status_ws.get_all_values)
+    except gspread.exceptions.WorksheetNotFound:
+        return []
+
+    if len(raw_rows) <= 1:
+        return []
+
+    headers = [clean_text(h) for h in raw_rows[0]]
+    rows = []
+    for raw in raw_rows[1:]:
+        padded = list(raw) + [""] * max(0, len(headers) - len(raw))
+        row = dict(zip(headers, padded))
+        legacy_bill_id = clean_text(row.get("bill_id", ""))
+        if not legacy_bill_id:
+            continue
+        rows.append({
+            "legacy_bill_id": legacy_bill_id,
+            "month": int(safe_float(row.get("month", 0))),
+            "year": int(safe_float(row.get("year", 0))),
+            "paid": is_true_value(row.get("paid", False)),
+            "paid_at": migration_datetime_iso(row.get("paid_at", ""), default_now=False),
+        })
+    return rows
+
+
+def source_card_invoice_rows():
+    try:
+        invoice_ws = google_sheets_retry(sh.worksheet, CARD_INVOICES_SHEET_NAME)
+        raw_rows = google_sheets_retry(invoice_ws.get_all_values)
+    except gspread.exceptions.WorksheetNotFound:
+        return []
+
+    if len(raw_rows) <= 1:
+        return []
+
+    headers = [clean_text(h) for h in raw_rows[0]]
+    rows = []
+    for raw in raw_rows[1:]:
+        padded = list(raw) + [""] * max(0, len(headers) - len(raw))
+        row = dict(zip(headers, padded))
+        card = clean_text(row.get("card", ""))
+        month = int(safe_float(row.get("month", 0)))
+        year = int(safe_float(row.get("year", 0)))
+        if not card or not (1 <= month <= 12) or year <= 0:
+            continue
+        rows.append({
+            "card": card,
+            "month": month,
+            "year": year,
+            "amount": round(abs(safe_float(row.get("amount", 0))), 2),
+            "paid": is_true_value(row.get("paid", False)),
+            "paid_at": migration_datetime_iso(row.get("paid_at", ""), default_now=False),
+            "updated_at": migration_datetime_iso(row.get("updated_at", "")),
+        })
+    return rows
+
+
+def build_source_import_batches(records):
+    groups = {}
+
+    for record in records:
+        meta = parse_import_note_metadata(record.get("notes", ""))
+        if not meta:
+            continue
+
+        batch_code = clean_text(meta.get("batch_id", ""))
+        if not batch_code:
+            continue
+
+        group = groups.setdefault(batch_code, {
+            "batch_code": batch_code,
+            "filename": clean_text(meta.get("file_name", "")) or "Arquivo não identificado",
+            "source": clean_text(meta.get("source", "")) or "Origem não identificada",
+            "import_type": None,
+            "row_count": 0,
+            "historical_only": True,
+            "imported_at": migration_datetime_iso(meta.get("imported_at", "")),
+        })
+
+        group["row_count"] += 1
+        if not is_historical_record(record):
+            group["historical_only"] = False
+
+    return list(groups.values())
+
+
+def build_source_transactions(records, batch_uuid_by_code):
+    rows = []
+
+    for record in records:
+        tx_date = record.get("created_at")
+        parsed_dt = parse_migration_datetime(tx_date)
+        meta = parse_import_note_metadata(record.get("notes", ""))
+
+        batch_uuid = None
+        import_source = None
+        import_row_id = None
+        if meta:
+            batch_uuid = batch_uuid_by_code.get(clean_text(meta.get("batch_id", "")))
+            import_source = clean_text(meta.get("source", "")) or None
+            import_row_id = clean_text(meta.get("import_id", "")) or None
+
+        installments = int(safe_float(record.get("installments", 1)))
+        if installments < 1:
+            installments = 1
+
+        row = {
+            "transaction_type": clean_text(record.get("type", "")).lower(),
+            "description": clean_text(record.get("description", "")) or "Sem descrição",
+            "amount": round(abs(safe_float(record.get("amount", 0))), 2),
+            "payment_method": clean_text(record.get("payment_method", "")) or "outro",
+            "installments": installments,
+            "installment_value": round(abs(safe_float(record.get("installment_value", 0))), 2),
+            "card": clean_text(record.get("card", "")) or None,
+            "is_for_someone": is_true_value(record.get("is_for_someone", False)),
+            "bought_by": clean_text(record.get("bought_by", "")) or None,
+            "transaction_date": parsed_dt.date().isoformat(),
+            "notes": clean_text(record.get("notes", "")) or None,
+            "category": clean_text(record.get("category", "")) or None,
+            "subcategory": clean_text(record.get("subcategory", "")) or None,
+            "tags": clean_tags_for_supabase(record.get("tags", "")),
+            "impact_current_balance": is_true_value(record.get("impact_current_balance", "TRUE")),
+            "historical_only": is_true_value(record.get("historical_only", "FALSE")),
+            "import_batch_id": batch_uuid,
+            "import_source": import_source,
+            "import_row_id": import_row_id,
+            "created_at": parsed_dt.isoformat(),
+            "updated_at": parsed_dt.isoformat(),
+        }
+
+        if row["transaction_type"] not in {"entrada", "saida"}:
+            raise RuntimeError(
+                f"Transação inválida na linha {record.get('sheet_row_idx')}: tipo '{row['transaction_type']}'."
+            )
+
+        rows.append(row)
+
+    return rows
+
+
+def build_source_app_config_rows(app_config):
+    now_iso = datetime.now(ZoneInfo("America/Sao_Paulo")).isoformat()
+    keys = ["app_start_date", "initial_bank_balance", "initial_cash_balance"]
+    return [
+        {
+            "key": key,
+            "value": clean_text(app_config.get(key, "")),
+            "updated_at": now_iso,
+        }
+        for key in keys
+    ]
+
+
+def build_source_fixed_bills_rows():
+    rows = []
+    for bill in load_fixed_bills():
+        rows.append({
+            "legacy_bill_id": clean_text(bill.get("bill_id", "")) or None,
+            "name": clean_text(bill.get("name", "")) or "Conta fixa",
+            "category": clean_text(bill.get("category", "")) or None,
+            "amount": round(abs(safe_float(bill.get("amount", 0))), 2),
+            "due_day": max(1, min(31, int(safe_float(bill.get("due_day", 1))))),
+            "payment_method": clean_text(bill.get("payment_method", "")) or None,
+            "notes": clean_text(bill.get("notes", "")) or None,
+            "active": bool(bill.get("active", True)),
+            "created_at": migration_datetime_iso(bill.get("created_at", "")),
+            "updated_at": migration_datetime_iso(bill.get("created_at", "")),
+        })
+    return rows
+
+
+def get_supabase_target_counts():
+    counts = {}
+    for table in SUPABASE_TABLES:
+        rows = supabase_select_rows(table, columns="id" if table != "app_config" else "key", limit=1000)
+        counts[table] = len(rows or [])
+    return counts
+
+
+def build_migration_source_snapshot(records, app_config):
+    return {
+        "transactions": records,
+        "app_config": build_source_app_config_rows(app_config),
+        "fixed_bills": build_source_fixed_bills_rows(),
+        "fixed_bill_status": source_fixed_bill_status_rows(),
+        "card_invoices": source_card_invoice_rows(),
+        "import_batches": build_source_import_batches(records),
+    }
+
+
+def migration_metrics_from_source(snapshot):
+    transactions = snapshot["transactions"]
+    return {
+        "transactions": len(transactions),
+        "income_total": round(sum(abs(safe_float(r.get("amount", 0))) for r in transactions if clean_text(r.get("type", "")).lower() == "entrada"), 2),
+        "expense_total": round(sum(abs(safe_float(r.get("amount", 0))) for r in transactions if clean_text(r.get("type", "")).lower() == "saida"), 2),
+        "app_config": len(snapshot["app_config"]),
+        "fixed_bills": len(snapshot["fixed_bills"]),
+        "fixed_bill_status": len(snapshot["fixed_bill_status"]),
+        "card_invoices": len(snapshot["card_invoices"]),
+        "import_batches": len(snapshot["import_batches"]),
+        "fixed_bills_total": round(sum(safe_float(r.get("amount", 0)) for r in snapshot["fixed_bills"]), 2),
+        "card_invoices_total": round(sum(safe_float(r.get("amount", 0)) for r in snapshot["card_invoices"]), 2),
+    }
+
+
+def migrate_snapshot_to_supabase(snapshot, progress_callback=None):
+    def update_progress(value, message):
+        if progress_callback:
+            progress_callback(value, message)
+
+    update_progress(5, "Conferindo se o Supabase está vazio...")
+    target_counts = get_supabase_target_counts()
+    occupied = {table: count for table, count in target_counts.items() if count > 0}
+    if occupied:
+        occupied_text = ", ".join(f"{table}: {count}" for table, count in occupied.items())
+        raise RuntimeError(
+            "Migração cancelada por segurança. O Supabase já possui dados: " + occupied_text
+        )
+
+    update_progress(12, "Migrando histórico de importações...")
+    inserted_batches = supabase_insert_rows("import_batches", snapshot["import_batches"])
+    batch_uuid_by_code = {
+        clean_text(row.get("batch_code", "")): clean_text(row.get("id", ""))
+        for row in inserted_batches
+        if clean_text(row.get("batch_code", "")) and clean_text(row.get("id", ""))
+    }
+
+    update_progress(28, "Preparando e migrando transações...")
+    transaction_rows = build_source_transactions(snapshot["transactions"], batch_uuid_by_code)
+    supabase_insert_rows("transactions", transaction_rows)
+
+    update_progress(50, "Migrando configuração inicial...")
+    supabase_insert_rows("app_config", snapshot["app_config"])
+
+    update_progress(60, "Migrando contas e assinaturas...")
+    inserted_bills = supabase_insert_rows("fixed_bills", snapshot["fixed_bills"])
+    bill_uuid_by_legacy = {
+        clean_text(row.get("legacy_bill_id", "")): clean_text(row.get("id", ""))
+        for row in inserted_bills
+        if clean_text(row.get("legacy_bill_id", "")) and clean_text(row.get("id", ""))
+    }
+
+    update_progress(72, "Migrando status mensal das contas fixas...")
+    status_rows = []
+    for status in snapshot["fixed_bill_status"]:
+        bill_uuid = bill_uuid_by_legacy.get(clean_text(status.get("legacy_bill_id", "")))
+        if not bill_uuid:
+            raise RuntimeError(
+                "Não encontrei no Supabase a conta fixa vinculada ao status legado "
+                f"'{status.get('legacy_bill_id')}'."
+            )
+        status_rows.append({
+            "bill_id": bill_uuid,
+            "month": int(status["month"]),
+            "year": int(status["year"]),
+            "paid": bool(status["paid"]),
+            "paid_at": status.get("paid_at"),
+        })
+    supabase_insert_rows("fixed_bill_status", status_rows)
+
+    update_progress(84, "Migrando faturas dos cartões...")
+    supabase_insert_rows("card_invoices", snapshot["card_invoices"])
+
+    update_progress(94, "Conferindo quantidades migradas...")
+    final_counts = get_supabase_target_counts()
+    expected_counts = {
+        "transactions": len(snapshot["transactions"]),
+        "app_config": len(snapshot["app_config"]),
+        "fixed_bills": len(snapshot["fixed_bills"]),
+        "fixed_bill_status": len(snapshot["fixed_bill_status"]),
+        "card_invoices": len(snapshot["card_invoices"]),
+        "import_batches": len(snapshot["import_batches"]),
+    }
+
+    mismatches = {
+        table: (expected_counts[table], final_counts.get(table, 0))
+        for table in expected_counts
+        if expected_counts[table] != final_counts.get(table, 0)
+    }
+    if mismatches:
+        mismatch_text = "; ".join(
+            f"{table}: esperado {expected}, encontrado {actual}"
+            for table, (expected, actual) in mismatches.items()
+        )
+        raise RuntimeError("Conferência final encontrou divergências: " + mismatch_text)
+
+    update_progress(100, "Migração concluída e conferida.")
+    return expected_counts
+
+
+def render_supabase_migration_page(records, app_config):
+    st.markdown("# Migrar dados para o Supabase")
+    st.caption(
+        "Ferramenta temporária da ETAPA 2. Ela copia os dados do Google Sheets para o Supabase. "
+        "Nada é apagado da planilha."
+    )
+
+    supabase_url, secret_key = get_supabase_migration_secrets()
+    if not supabase_url or not secret_key:
+        st.error(
+            "Não encontrei SUPABASE_URL e SUPABASE_SECRET_KEY nos Secrets do Streamlit."
+        )
+        return
+
+    st.success("Credenciais do Supabase encontradas nos Secrets do Streamlit.")
+
+    try:
+        snapshot = build_migration_source_snapshot(records, app_config)
+        metrics = migration_metrics_from_source(snapshot)
+        target_counts = get_supabase_target_counts()
+    except Exception as err:
+        st.error(f"Erro ao conferir os dados antes da migração: {err}")
+        return
+
+    st.markdown("### Conferência antes de migrar")
+    st.write("**Google Sheets — origem**")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Transações", metrics["transactions"])
+    c2.metric("Entradas brutas registradas", format_currency(metrics["income_total"]))
+    c3.metric("Saídas brutas registradas", format_currency(metrics["expense_total"]))
+
+    c4, c5, c6 = st.columns(3)
+    c4.metric("Configurações", metrics["app_config"])
+    c5.metric("Contas fixas", metrics["fixed_bills"])
+    c6.metric("Status mensais", metrics["fixed_bill_status"])
+
+    c7, c8, c9 = st.columns(3)
+    c7.metric("Faturas de cartão", metrics["card_invoices"])
+    c8.metric("Lotes de importação", metrics["import_batches"])
+    c9.metric("Total cadastrado em contas fixas", format_currency(metrics["fixed_bills_total"]))
+
+    st.markdown("### Supabase — destino")
+    destination_df = pd.DataFrame([
+        {"Tabela": table, "Registros atuais": target_counts.get(table, 0)}
+        for table in SUPABASE_TABLES
+    ])
+    st.dataframe(destination_df, hide_index=True, use_container_width=True)
+
+    occupied = {table: count for table, count in target_counts.items() if count > 0}
+    if occupied:
+        st.error(
+            "O Supabase já possui registros. A migração foi bloqueada para evitar duplicação. "
+            "Não clique em nada nem apague tabelas manualmente; me mostre esta tela."
+        )
+        return
+
+    st.info(
+        "O destino está vazio. A migração vai apenas COPIAR os dados. "
+        "O Google Sheets continuará intacto como backup."
+    )
+
+    confirmation = st.checkbox(
+        "Confirmo que quero copiar os dados atuais do Google Sheets para o Supabase.",
+        key="confirm_supabase_migration",
+    )
+
+    if st.button(
+        "Migrar dados agora",
+        type="primary",
+        disabled=not confirmation,
+        key="run_supabase_migration",
+    ):
+        progress = st.progress(0)
+        status = st.empty()
+
+        def progress_callback(value, message):
+            progress.progress(int(value))
+            status.caption(message)
+
+        try:
+            final_counts = migrate_snapshot_to_supabase(
+                snapshot,
+                progress_callback=progress_callback,
+            )
+            status.success("Migração concluída e conferida com sucesso.")
+            st.balloons()
+            st.success(
+                "Todos os grupos de dados foram copiados para o Supabase. "
+                "A planilha do Google Sheets NÃO foi apagada nem alterada por esta migração."
+            )
+            st.json(final_counts)
+        except Exception as err:
+            status.empty()
+            st.error(f"Migração interrompida: {err}")
+            st.warning(
+                "Não tente rodar novamente antes de me mostrar esta mensagem. "
+                "Vamos conferir o que foi gravado no Supabase antes de qualquer nova tentativa."
+            )
+
+
 def render_install_app_page():
     installed = is_running_installed_webapp()
 
@@ -4713,7 +5255,7 @@ render_transaction_animation()
 current_date = datetime.now()
 
 st.sidebar.markdown('<div class="sidebar-nav-title">Navegação</div>', unsafe_allow_html=True)
-nav_options = ["🏠 Home", "📌 Contas e assinaturas", "🏦 Trazer do banco"]
+nav_options = ["🏠 Home", "📌 Contas e assinaturas", "🏦 Trazer do banco", "🔄 Migrar para Supabase"]
 if not is_running_installed_webapp():
     nav_options.append("📱 Instalar app")
 
@@ -4733,6 +5275,8 @@ elif selected_nav == "📌 Contas e assinaturas":
     page_key = "contas_assinaturas"
 elif selected_nav == "🏦 Trazer do banco":
     page_key = "importar_csv"
+elif selected_nav == "🔄 Migrar para Supabase":
+    page_key = "migrar_supabase"
 else:
     page_key = "instalar_app"
 
@@ -5234,5 +5778,7 @@ elif page_key == "contas_assinaturas":
     render_bills_page(selected_month, selected_year)
 elif page_key == "importar_csv":
     render_import_csv_page(selected_month, selected_year, records)
+elif page_key == "migrar_supabase":
+    render_supabase_migration_page(records, app_config)
 else:
     render_install_app_page()
