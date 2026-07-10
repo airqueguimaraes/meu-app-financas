@@ -3,7 +3,6 @@ import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime
 import dateutil.relativedelta
-import gspread
 import os
 import base64
 import mimetypes
@@ -2436,7 +2435,7 @@ components.html(
 
 # =========================================================
 # BANCO DE DADOS PRINCIPAL: SUPABASE
-# Google Sheets deixa de participar da leitura/gravação normal do app.
+# Todas as leituras e gravações do app usam diretamente o Supabase/PostgreSQL.
 # =========================================================
 
 
@@ -2567,9 +2566,6 @@ def db_delete_rows(table, filters):
     )
 
 
-def _db_bool_text(value):
-    return "TRUE" if value is True or str(value).strip().lower() == "true" else "FALSE"
-
 
 def _db_tags_to_text(value):
     if isinstance(value, list):
@@ -2589,339 +2585,8 @@ def _db_text_to_tags(value):
     ]
 
 
-def _a1_col_to_number(col_letters):
-    number = 0
-    for char in col_letters.upper():
-        if not char.isalpha():
-            continue
-        number = number * 26 + (ord(char) - ord("A") + 1)
-    return number
-
-
-def _parse_a1_range(range_name):
-    match = re.match(r"^([A-Z]+)(\d+):([A-Z]+)(\d+)$", str(range_name).upper())
-    if not match:
-        raise ValueError(f"Range A1 não suportado: {range_name}")
-    start_col, start_row, end_col, end_row = match.groups()
-    if int(start_row) != int(end_row):
-        raise ValueError(f"Range com múltiplas linhas não suportado: {range_name}")
-    return _a1_col_to_number(start_col), int(start_row), _a1_col_to_number(end_col)
-
-
-class SupabaseWorksheetAdapter:
-    """Camada de compatibilidade temporária com a API usada pelo app antigo.
-
-    Mantém a UI intacta, mas todas as leituras/gravações passam pelo Supabase.
-    """
-
-    SCHEMAS = {
-        "transactions": {
-            "table": "transactions",
-            "headers": [
-                "type", "description", "amount", "payment_method", "installments",
-                "installment_value", "card", "is_for_someone", "bought_by",
-                "created_at", "notes", "category", "subcategory", "tags",
-                "impact_current_balance", "historical_only"
-            ],
-            "order": "transaction_date.asc,created_at.asc,id.asc",
-        },
-        "app_config": {
-            "table": "app_config",
-            "headers": ["key", "value", "updated_at"],
-            "order": "key.asc",
-        },
-        "contas_assinaturas": {
-            "table": "fixed_bills",
-            "headers": [
-                "name", "category", "amount", "due_day", "payment_method",
-                "notes", "active", "created_at", "bill_id"
-            ],
-            "order": "created_at.asc,id.asc",
-        },
-        "contas_assinaturas_status": {
-            "table": "fixed_bill_status",
-            "headers": ["bill_id", "month", "year", "paid", "paid_at"],
-            "order": "year.asc,month.asc,bill_id.asc,id.asc",
-        },
-        "faturas_cartoes_mensais": {
-            "table": "card_invoices",
-            "headers": ["card", "month", "year", "amount", "updated_at", "paid", "paid_at"],
-            "order": "year.asc,month.asc,card.asc,id.asc",
-        },
-    }
-
-    def __init__(self, logical_name):
-        if logical_name not in self.SCHEMAS:
-            raise KeyError(f"Fonte de dados desconhecida: {logical_name}")
-        self.logical_name = logical_name
-        self.schema = self.SCHEMAS[logical_name]
-        self.table = self.schema["table"]
-        self.headers = list(self.schema["headers"])
-
-    def _fetch_rows(self):
-        return db_select_rows(
-            self.table,
-            columns="*",
-            order=self.schema.get("order"),
-        )
-
-    def _row_id_for_sheet_row(self, row_idx):
-        data_index = int(row_idx) - 2
-        rows = self._fetch_rows()
-        if data_index < 0 or data_index >= len(rows):
-            raise IndexError(f"Linha {row_idx} não encontrada em {self.logical_name}.")
-        row = rows[data_index]
-        if self.table == "app_config":
-            return "key", row.get("key")
-        return "id", row.get("id")
-
-    def _record_to_values(self, record):
-        if self.logical_name == "transactions":
-            business_date = record.get("transaction_date") or record.get("created_at") or ""
-            return [
-                record.get("transaction_type", ""),
-                record.get("description", ""),
-                record.get("amount", 0),
-                record.get("payment_method", ""),
-                record.get("installments", 1),
-                record.get("installment_value", 0),
-                record.get("card") or "",
-                _db_bool_text(record.get("is_for_someone", False)),
-                record.get("bought_by") or "",
-                str(business_date),
-                record.get("notes") or "",
-                record.get("category") or "",
-                record.get("subcategory") or "",
-                _db_tags_to_text(record.get("tags")),
-                _db_bool_text(record.get("impact_current_balance", True)),
-                _db_bool_text(record.get("historical_only", False)),
-            ]
-
-        if self.logical_name == "app_config":
-            return [record.get("key", ""), record.get("value", ""), record.get("updated_at", "")]
-
-        if self.logical_name == "contas_assinaturas":
-            return [
-                record.get("name", ""),
-                record.get("category") or "",
-                record.get("amount", 0),
-                record.get("due_day", 1),
-                record.get("payment_method") or "",
-                record.get("notes") or "",
-                _db_bool_text(record.get("active", True)),
-                record.get("created_at", ""),
-                record.get("id", ""),
-            ]
-
-        if self.logical_name == "contas_assinaturas_status":
-            return [
-                record.get("bill_id", ""),
-                record.get("month", ""),
-                record.get("year", ""),
-                _db_bool_text(record.get("paid", False)),
-                record.get("paid_at") or "",
-            ]
-
-        if self.logical_name == "faturas_cartoes_mensais":
-            return [
-                record.get("card", ""),
-                record.get("month", ""),
-                record.get("year", ""),
-                record.get("amount", 0),
-                record.get("updated_at", ""),
-                _db_bool_text(record.get("paid", False)),
-                record.get("paid_at") or "",
-            ]
-
-        raise RuntimeError(f"Conversão não implementada: {self.logical_name}")
-
-    def _values_to_payload(self, values, existing=None):
-        padded = list(values) + [""] * max(0, len(self.headers) - len(values))
-        data = dict(zip(self.headers, padded[:len(self.headers)]))
-        existing = existing or {}
-
-        if self.logical_name == "transactions":
-            parsed_date = parse_business_date(data.get("created_at"))
-            if pd.isna(parsed_date):
-                parsed_date = pd.Timestamp.now()
-            installments = max(1, int(float(data.get("installments") or 1)))
-            return {
-                "transaction_type": str(data.get("type") or "").strip().lower(),
-                "description": str(data.get("description") or "Sem descrição").strip(),
-                "amount": round(abs(float(data.get("amount") or 0)), 2),
-                "payment_method": str(data.get("payment_method") or "outro").strip(),
-                "installments": installments,
-                "installment_value": round(abs(float(data.get("installment_value") or 0)), 2),
-                "card": str(data.get("card") or "").strip() or None,
-                "is_for_someone": str(data.get("is_for_someone") or "").strip().lower() == "true",
-                "bought_by": str(data.get("bought_by") or "").strip() or None,
-                "transaction_date": parsed_date.date().isoformat(),
-                "notes": str(data.get("notes") or "").strip() or None,
-                "category": str(data.get("category") or "").strip() or None,
-                "subcategory": str(data.get("subcategory") or "").strip() or None,
-                "tags": _db_text_to_tags(data.get("tags")),
-                "impact_current_balance": str(data.get("impact_current_balance") or "TRUE").strip().lower() == "true",
-                "historical_only": str(data.get("historical_only") or "FALSE").strip().lower() == "true",
-                # Mantém a semântica histórica do app: created_at acompanha a data financeira.
-                "created_at": parsed_date.isoformat(),
-            }
-
-        if self.logical_name == "app_config":
-            return {
-                "key": str(data.get("key") or "").strip(),
-                "value": str(data.get("value") or ""),
-            }
-
-        if self.logical_name == "contas_assinaturas":
-            payload = {
-                "name": str(data.get("name") or "Conta fixa").strip(),
-                "category": str(data.get("category") or "").strip() or None,
-                "amount": round(abs(float(data.get("amount") or 0)), 2),
-                "due_day": max(1, min(31, int(float(data.get("due_day") or 1)))),
-                "payment_method": str(data.get("payment_method") or "").strip() or None,
-                "notes": str(data.get("notes") or "").strip() or None,
-                "active": str(data.get("active") or "TRUE").strip().lower() == "true",
-            }
-            if data.get("created_at"):
-                parsed = pd.to_datetime(data.get("created_at"), errors="coerce")
-                if not pd.isna(parsed):
-                    payload["created_at"] = parsed.isoformat()
-            legacy_id = str(data.get("bill_id") or "").strip()
-            if legacy_id and not existing.get("id"):
-                payload["legacy_bill_id"] = legacy_id
-            return payload
-
-        if self.logical_name == "contas_assinaturas_status":
-            return {
-                "bill_id": str(data.get("bill_id") or "").strip(),
-                "month": int(float(data.get("month") or 0)),
-                "year": int(float(data.get("year") or 0)),
-                "paid": str(data.get("paid") or "FALSE").strip().lower() == "true",
-                "paid_at": str(data.get("paid_at") or "").strip() or None,
-            }
-
-        if self.logical_name == "faturas_cartoes_mensais":
-            return {
-                "card": str(data.get("card") or "").strip(),
-                "month": int(float(data.get("month") or 0)),
-                "year": int(float(data.get("year") or 0)),
-                "amount": round(abs(float(data.get("amount") or 0)), 2),
-                "paid": str(data.get("paid") or "FALSE").strip().lower() == "true",
-                "paid_at": str(data.get("paid_at") or "").strip() or None,
-            }
-
-        raise RuntimeError(f"Conversão não implementada: {self.logical_name}")
-
-    def get_all_values(self):
-        rows = self._fetch_rows()
-        return [self.headers] + [self._record_to_values(record) for record in rows]
-
-    def get_all_records(self):
-        return [dict(zip(self.headers, row)) for row in self.get_all_values()[1:]]
-
-    def append_row(self, row, value_input_option=None):
-        # Cabeçalhos de worksheets antigas viram no-op: as tabelas já existem.
-        if [str(item).strip() for item in row] == self.headers:
-            return []
-        payload = self._values_to_payload(row)
-        return db_insert_rows(self.table, payload)
-
-    def append_rows(self, rows, value_input_option=None):
-        payloads = [self._values_to_payload(row) for row in rows]
-        return db_insert_rows(self.table, payloads)
-
-    def update(self, range_name, values, value_input_option=None):
-        start_col, row_idx, end_col = _parse_a1_range(range_name)
-        if row_idx == 1:
-            # Alterações de cabeçalho não são necessárias no banco relacional.
-            return []
-
-        key_col, key_value = self._row_id_for_sheet_row(row_idx)
-        existing_rows = self._fetch_rows()
-        existing = existing_rows[row_idx - 2]
-        current_values = self._record_to_values(existing)
-        incoming = list(values[0]) if values else []
-
-        for offset, value in enumerate(incoming):
-            col_idx = start_col - 1 + offset
-            if col_idx < len(current_values):
-                current_values[col_idx] = value
-
-        payload = self._values_to_payload(current_values, existing=existing)
-        return db_update_rows(
-            self.table,
-            {key_col: f"eq.{key_value}"},
-            payload,
-        )
-
-    def update_cell(self, row_idx, col_idx, value):
-        if int(row_idx) == 1:
-            return []
-        key_col, key_value = self._row_id_for_sheet_row(row_idx)
-        existing_rows = self._fetch_rows()
-        existing = existing_rows[int(row_idx) - 2]
-        current_values = self._record_to_values(existing)
-        target_index = int(col_idx) - 1
-        if target_index < 0 or target_index >= len(current_values):
-            raise IndexError(f"Coluna {col_idx} inválida em {self.logical_name}.")
-        current_values[target_index] = value
-        payload = self._values_to_payload(current_values, existing=existing)
-        return db_update_rows(
-            self.table,
-            {key_col: f"eq.{key_value}"},
-            payload,
-        )
-
-    def delete_rows(self, row_idx):
-        key_col, key_value = self._row_id_for_sheet_row(row_idx)
-        return db_delete_rows(
-            self.table,
-            {key_col: f"eq.{key_value}"},
-        )
-
-
-class SupabaseSpreadsheetAdapter:
-    NAME_MAP = {
-        "app_config": "app_config",
-        "contas_assinaturas": "contas_assinaturas",
-        "contas_assinaturas_status": "contas_assinaturas_status",
-        "faturas_cartoes_mensais": "faturas_cartoes_mensais",
-    }
-
-    def get_worksheet(self, index):
-        if int(index) != 0:
-            raise IndexError("Apenas a fonte principal de transações usa índice numérico.")
-        return SupabaseWorksheetAdapter("transactions")
-
-    def worksheet(self, name):
-        logical_name = self.NAME_MAP.get(str(name), str(name))
-        return SupabaseWorksheetAdapter(logical_name)
-
-    def add_worksheet(self, title, rows=None, cols=None):
-        # As tabelas já foram criadas na ETAPA 1 do Supabase.
-        return self.worksheet(title)
-
-
-def google_sheets_retry(action, *args, attempts=4, base_delay=0.5, **kwargs):
-    """Compatibilidade com o código existente: agora executa operações do Supabase."""
-    last_error = None
-    for attempt in range(attempts):
-        try:
-            return action(*args, **kwargs)
-        except Exception as err:
-            last_error = err
-            error_text = str(err)
-            is_temporary = any(code in error_text for code in ["429", "500", "502", "503", "504"])
-            if not is_temporary or attempt == attempts - 1:
-                raise
-            time.sleep(base_delay * (attempt + 1))
-    raise last_error
-
-
 try:
-    sh = SupabaseSpreadsheetAdapter()
-    worksheet = sh.get_worksheet(0)
-    # Teste mínimo e barato: garante que o app consegue ler o banco antes de renderizar.
+    # Teste mínimo e barato antes de renderizar o app.
     db_select_rows("app_config", columns="key", page_size=10)
 except Exception as e:
     st.error(
@@ -2929,6 +2594,7 @@ except Exception as e:
         f"Detalhe: {e}"
     )
     st.stop()
+
 
 if "editing_index" not in st.session_state:
     st.session_state.editing_index = None
@@ -3127,39 +2793,55 @@ INCOME_RULES = [
     (["pagseguro", "pag seguro", "stone", "ton ", "sumup", "cielo", "rede", "getnet", "safrapay", "infinitepay", "mercado pago", "maquininha"], "Receitas", "Vendas / maquininhas", "maquininha, vendas, automatico"),
 ]
 
-def worksheet_column_letter(col_number):
-    result = ""
-    while col_number:
-        col_number, remainder = divmod(col_number - 1, 26)
-        result = chr(65 + remainder) + result
-    return result
 
-def ensure_transaction_headers():
-    try:
-        values = google_sheets_retry(worksheet.get_all_values)
-        if not values:
-            google_sheets_retry(worksheet.append_row, TRANSACTION_HEADERS, value_input_option="RAW")
-            return TRANSACTION_HEADERS
+def transaction_values_to_payload(
+    values,
+    import_batch_id=None,
+    import_source=None,
+    import_row_id=None,
+):
+    padded = list(values) + [""] * max(0, len(TRANSACTION_HEADERS) - len(values))
+    data = dict(zip(TRANSACTION_HEADERS, padded[:len(TRANSACTION_HEADERS)]))
 
-        current_headers = [str(h).strip() for h in values[0]]
-        final_headers = current_headers[:]
-        changed = False
-        for header in TRANSACTION_HEADERS:
-            if header not in final_headers:
-                final_headers.append(header)
-                changed = True
+    parsed_date = parse_business_date(data.get("created_at"))
+    if pd.isna(parsed_date):
+        parsed_date = pd.Timestamp.now()
 
-        if changed:
-            last_col = worksheet_column_letter(len(final_headers))
-            google_sheets_retry(
-                worksheet.update,
-                range_name=f"A1:{last_col}1",
-                values=[final_headers],
-                value_input_option="RAW"
-            )
-        return final_headers
-    except Exception:
-        return []
+    installments = max(1, int(safe_float(data.get("installments")) or 1))
+
+    payload = {
+        "transaction_type": clean_text(data.get("type")).lower(),
+        "description": clean_text(data.get("description")) or "Sem descrição",
+        "amount": round(abs(safe_float(data.get("amount"))), 2),
+        "payment_method": clean_text(data.get("payment_method")) or "outro",
+        "installments": installments,
+        "installment_value": round(abs(safe_float(data.get("installment_value"))), 2),
+        "card": clean_text(data.get("card")) or None,
+        "is_for_someone": is_true_value(data.get("is_for_someone")),
+        "bought_by": clean_text(data.get("bought_by")) or None,
+        "transaction_date": parsed_date.date().isoformat(),
+        "notes": clean_text(data.get("notes")) or None,
+        "category": clean_text(data.get("category")) or None,
+        "subcategory": clean_text(data.get("subcategory")) or None,
+        "tags": _db_text_to_tags(data.get("tags")),
+        "impact_current_balance": is_true_value(
+            clean_text(data.get("impact_current_balance")) or "TRUE"
+        ),
+        "historical_only": is_true_value(
+            clean_text(data.get("historical_only")) or "FALSE"
+        ),
+        "created_at": parsed_date.isoformat(),
+    }
+
+    if import_batch_id:
+        payload["import_batch_id"] = import_batch_id
+    if import_source:
+        payload["import_source"] = clean_text(import_source)
+    if import_row_id:
+        payload["import_row_id"] = clean_text(import_row_id)
+
+    return payload
+
 
 def get_category_options():
     return ["Sem categoria"] + list(CATEGORY_LIBRARY.keys())
@@ -3255,73 +2937,53 @@ def safe_float(val):
     return parsed
 
 @st.cache_data(ttl=30)
+
+@st.cache_data(ttl=30)
 def load_data():
     try:
-        ensure_transaction_headers()
-        raw_rows = google_sheets_retry(worksheet.get_all_values)
-        if len(raw_rows) <= 1:
-            return []
-            
-        headers = [str(h).strip() for h in raw_rows[0]]
-        records_list = []
-        
-        field_map = {
-            "type": headers.index("type") if "type" in headers else 0,
-            "description": headers.index("description") if "description" in headers else 1,
-            "amount": headers.index("amount") if "amount" in headers else 2,
-            "payment_method": headers.index("payment_method") if "payment_method" in headers else 3,
-            "installments": headers.index("installments") if "installments" in headers else 4,
-            "installment_value": headers.index("installment_value") if "installment_value" in headers else 5,
-            "card": headers.index("card") if "card" in headers else 6,
-            "is_for_someone": headers.index("is_for_someone") if "is_for_someone" in headers else 7,
-            "bought_by": headers.index("bought_by") if "bought_by" in headers else 8,
-            "created_at": headers.index("created_at") if "created_at" in headers else 9,
-            "notes": headers.index("notes") if "notes" in headers else 10,
-            "category": headers.index("category") if "category" in headers else 11,
-            "subcategory": headers.index("subcategory") if "subcategory" in headers else 12,
-            "tags": headers.index("tags") if "tags" in headers else 13,
-            "impact_current_balance": headers.index("impact_current_balance") if "impact_current_balance" in headers else None,
-            "historical_only": headers.index("historical_only") if "historical_only" in headers else None,
-        }
+        rows = db_select_rows(
+            "transactions",
+            columns="*",
+            order="transaction_date.asc,created_at.asc,id.asc",
+        )
 
-        for idx, row in enumerate(raw_rows[1:], start=2):
-            while len(row) < len(headers):
-                row.append("")
-                
-            r = {
-                "sheet_row_idx": idx,
-                "type": clean_text(row[field_map["type"]]),
-                "description": clean_text(row[field_map["description"]]),
-                "amount": safe_float(row[field_map["amount"]]),
-                "payment_method": clean_text(row[field_map["payment_method"]]),
-                "installments": clean_text(row[field_map["installments"]]),
-                "installment_value": safe_float(row[field_map["installment_value"]]),
-                "card": clean_text(row[field_map["card"]]),
-                "is_for_someone": clean_text(row[field_map["is_for_someone"]]),
-                "bought_by": clean_text(row[field_map["bought_by"]]),
-                "notes": clean_text(row[field_map["notes"]]),
-                "category": clean_text(row[field_map["category"]]) if field_map["category"] < len(row) else "",
-                "subcategory": clean_text(row[field_map["subcategory"]]) if field_map["subcategory"] < len(row) else "",
-                "tags": clean_text(row[field_map["tags"]]) if field_map["tags"] < len(row) else "",
-                "impact_current_balance": clean_text(row[field_map["impact_current_balance"]]) if field_map["impact_current_balance"] is not None and field_map["impact_current_balance"] < len(row) else "TRUE",
-                "historical_only": clean_text(row[field_map["historical_only"]]) if field_map["historical_only"] is not None and field_map["historical_only"] < len(row) else "FALSE",
-            }
-            
-            raw_date = clean_text(row[field_map["created_at"]])
-            try:
-                r["created_at"] = pd.to_datetime(raw_date, errors='raise')
-            except Exception:
-                try:
-                    r["created_at"] = datetime.strptime(raw_date, "%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    r["created_at"] = datetime.now()
-                    
-            records_list.append(r)
-            
+        records_list = []
+        for row in rows:
+            business_date = parse_business_date(
+                row.get("transaction_date") or row.get("created_at")
+            )
+            if pd.isna(business_date):
+                business_date = pd.Timestamp.now()
+
+            record_id = clean_text(row.get("id"))
+            records_list.append({
+                "record_id": record_id,
+                "type": clean_text(row.get("transaction_type")),
+                "description": clean_text(row.get("description")),
+                "amount": safe_float(row.get("amount")),
+                "payment_method": clean_text(row.get("payment_method")),
+                "installments": clean_text(row.get("installments")) or "1",
+                "installment_value": safe_float(row.get("installment_value")),
+                "card": clean_text(row.get("card")),
+                "is_for_someone": "TRUE" if row.get("is_for_someone") else "FALSE",
+                "bought_by": clean_text(row.get("bought_by")),
+                "created_at": business_date,
+                "notes": clean_text(row.get("notes")),
+                "category": clean_text(row.get("category")),
+                "subcategory": clean_text(row.get("subcategory")),
+                "tags": _db_tags_to_text(row.get("tags")),
+                "impact_current_balance": "TRUE" if row.get("impact_current_balance", True) else "FALSE",
+                "historical_only": "TRUE" if row.get("historical_only", False) else "FALSE",
+                "import_batch_id": clean_text(row.get("import_batch_id")),
+                "import_source": clean_text(row.get("import_source")),
+                "import_row_id": clean_text(row.get("import_row_id")),
+            })
+
         return records_list
     except Exception as e:
         st.error(f"Erro crítico no processamento dos dados: {e}")
         return []
+
 
 def format_currency(val):
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -3528,28 +3190,12 @@ def build_top_expenses_chart_html(filtered_records):
     )
 
 
-APP_CONFIG_SHEET_NAME = "app_config"
-APP_CONFIG_HEADERS = ["key", "value", "updated_at"]
-
 def default_app_start_date():
     today = datetime.now().date()
     return today.replace(day=1)
 
-def get_or_create_app_config_worksheet():
-    try:
-        config_ws = google_sheets_retry(sh.worksheet, APP_CONFIG_SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        config_ws = google_sheets_retry(sh.add_worksheet, title=APP_CONFIG_SHEET_NAME, rows=50, cols=len(APP_CONFIG_HEADERS))
-        google_sheets_retry(config_ws.append_row, APP_CONFIG_HEADERS, value_input_option="RAW")
-    try:
-        values = google_sheets_retry(config_ws.get_all_values)
-        if not values:
-            google_sheets_retry(config_ws.append_row, APP_CONFIG_HEADERS, value_input_option="RAW")
-        elif [clean_text(h) for h in values[0]] != APP_CONFIG_HEADERS:
-            google_sheets_retry(config_ws.update, range_name="A1:C1", values=[APP_CONFIG_HEADERS], value_input_option="RAW")
-    except Exception:
-        pass
-    return config_ws
+
+@st.cache_data(ttl=30)
 
 @st.cache_data(ttl=30)
 def load_app_config():
@@ -3559,17 +3205,16 @@ def load_app_config():
         "initial_cash_balance": "0",
     }
     try:
-        config_ws = get_or_create_app_config_worksheet()
-        rows = google_sheets_retry(config_ws.get_all_records)
+        rows = db_select_rows("app_config", columns="key,value", order="key.asc")
         config = defaults.copy()
         for row in rows:
-            key = clean_text(row.get("key", ""))
-            value = clean_text(row.get("value", ""))
+            key = clean_text(row.get("key"))
             if key:
-                config[key] = value
+                config[key] = clean_text(row.get("value"))
         return config
     except Exception:
         return defaults
+
 
 def parse_app_config_date(value):
     try:
@@ -3578,22 +3223,27 @@ def parse_app_config_date(value):
         parsed = default_app_start_date()
     return parsed
 
+
 def save_app_config(updates):
-    config_ws = get_or_create_app_config_worksheet()
-    values = google_sheets_retry(config_ws.get_all_values)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    key_to_row = {}
-    for idx, row in enumerate(values[1:], start=2):
-        if row:
-            key_to_row[clean_text(row[0])] = idx
+    existing = {
+        clean_text(row.get("key")): row
+        for row in db_select_rows("app_config", columns="key,value")
+        if clean_text(row.get("key"))
+    }
+
     for key, value in updates.items():
-        value = clean_text(value)
-        if key in key_to_row:
-            row_idx = key_to_row[key]
-            google_sheets_retry(config_ws.update, range_name=f"A{row_idx}:C{row_idx}", values=[[key, value, now]], value_input_option="RAW")
+        key = clean_text(key)
+        payload = {"value": clean_text(value)}
+        if key in existing:
+            db_update_rows("app_config", {"key": f"eq.{key}"}, payload)
         else:
-            google_sheets_retry(config_ws.append_row, [key, value, now], value_input_option="RAW")
+            db_insert_rows(
+                "app_config",
+                {"key": key, "value": clean_text(value)},
+            )
+
     st.cache_data.clear()
+
 
 def is_historical_record(record):
     return is_true_value(record.get("historical_only", "FALSE"))
@@ -3616,134 +3266,41 @@ def should_record_appear_in_home(record, app_start_date):
     except Exception:
         return False
 
-BILLS_SHEET_NAME = "contas_assinaturas"
-BILLS_HEADERS = ["name", "category", "amount", "due_day", "payment_method", "notes", "active", "created_at", "bill_id"]
-
-BILLS_STATUS_SHEET_NAME = "contas_assinaturas_status"
-BILLS_STATUS_HEADERS = ["bill_id", "month", "year", "paid", "paid_at"]
 
 
-def make_fixed_bill_id(name, created_at, row_idx=None):
-    seed = f"{clean_text(name)}|{clean_text(created_at)}|{row_idx or ''}"
-    return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:18]
 
 
-def get_or_create_fixed_bills_worksheet():
-    try:
-        bills_ws = google_sheets_retry(sh.worksheet, BILLS_SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        bills_ws = google_sheets_retry(
-            sh.add_worksheet,
-            title=BILLS_SHEET_NAME,
-            rows=200,
-            cols=len(BILLS_HEADERS),
-        )
-        google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
-        return bills_ws
-
-    try:
-        values = google_sheets_retry(bills_ws.get_all_values)
-        if not values:
-            google_sheets_retry(bills_ws.append_row, BILLS_HEADERS, value_input_option="RAW")
-            return bills_ws
-
-        current_headers = [clean_text(h) for h in values[0]]
-        if current_headers != BILLS_HEADERS:
-            google_sheets_retry(
-                bills_ws.update,
-                range_name="A1:I1",
-                values=[BILLS_HEADERS],
-                value_input_option="RAW",
-            )
-
-        # Gera um ID estável para contas já existentes sem mexer nos dados atuais.
-        for row_idx, row in enumerate(values[1:], start=2):
-            padded = list(row) + [""] * max(0, len(BILLS_HEADERS) - len(row))
-            name = clean_text(padded[0])
-            created_at = clean_text(padded[7])
-            current_bill_id = clean_text(padded[8])
-            if name and not current_bill_id:
-                bill_id = make_fixed_bill_id(name, created_at, row_idx)
-                google_sheets_retry(bills_ws.update_cell, row_idx, 9, bill_id)
-    except Exception:
-        pass
-
-    return bills_ws
 
 
-def get_or_create_fixed_bills_status_worksheet():
-    try:
-        status_ws = google_sheets_retry(sh.worksheet, BILLS_STATUS_SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        status_ws = google_sheets_retry(
-            sh.add_worksheet,
-            title=BILLS_STATUS_SHEET_NAME,
-            rows=500,
-            cols=len(BILLS_STATUS_HEADERS),
-        )
-        google_sheets_retry(status_ws.append_row, BILLS_STATUS_HEADERS, value_input_option="RAW")
-        return status_ws
-
-    try:
-        values = google_sheets_retry(status_ws.get_all_values)
-        if not values:
-            google_sheets_retry(status_ws.append_row, BILLS_STATUS_HEADERS, value_input_option="RAW")
-        else:
-            current_headers = [clean_text(h) for h in values[0]]
-            if current_headers != BILLS_STATUS_HEADERS:
-                google_sheets_retry(
-                    status_ws.update,
-                    range_name="A1:E1",
-                    values=[BILLS_STATUS_HEADERS],
-                    value_input_option="RAW",
-                )
-    except Exception:
-        pass
-
-    return status_ws
-
+@st.cache_data(ttl=30)
 
 @st.cache_data(ttl=30)
 def load_fixed_bills():
     try:
-        bills_ws = get_or_create_fixed_bills_worksheet()
-        raw_rows = google_sheets_retry(bills_ws.get_all_values)
-        if len(raw_rows) <= 1:
-            return []
-
-        headers = [clean_text(h) for h in raw_rows[0]]
+        rows = db_select_rows(
+            "fixed_bills",
+            columns="*",
+            order="due_day.asc,name.asc,id.asc",
+        )
         records_list = []
-        field_map = {
-            header: headers.index(header) if header in headers else idx
-            for idx, header in enumerate(BILLS_HEADERS)
-        }
 
-        for idx, row in enumerate(raw_rows[1:], start=2):
-            row = list(row)
-            while len(row) < len(BILLS_HEADERS):
-                row.append("")
+        for row in rows:
+            name = clean_text(row.get("name"))
+            if not name:
+                continue
 
-            name = clean_text(row[field_map.get("name", 0)])
-            created_at = clean_text(row[field_map.get("created_at", 7)])
-            bill_id = clean_text(row[field_map.get("bill_id", 8)]) or make_fixed_bill_id(name, created_at, idx)
-
-            record = {
-                "sheet_row_idx": idx,
+            bill_id = clean_text(row.get("id"))
+            records_list.append({
                 "bill_id": bill_id,
                 "name": name,
-                "category": clean_text(row[field_map.get("category", 1)]),
-                "amount": safe_float(row[field_map.get("amount", 2)]),
-                "due_day": int(safe_float(row[field_map.get("due_day", 3)]))
-                if clean_text(row[field_map.get("due_day", 3)])
-                else 1,
-                "payment_method": clean_text(row[field_map.get("payment_method", 4)]),
-                "notes": clean_text(row[field_map.get("notes", 5)]),
-                "active": clean_text(row[field_map.get("active", 6)]).upper() != "FALSE",
-                "created_at": created_at,
-            }
-
-            if record["name"]:
-                records_list.append(record)
+                "category": clean_text(row.get("category")),
+                "amount": safe_float(row.get("amount")),
+                "due_day": int(safe_float(row.get("due_day")) or 1),
+                "payment_method": clean_text(row.get("payment_method")),
+                "notes": clean_text(row.get("notes")),
+                "active": bool(row.get("active", True)),
+                "created_at": clean_text(row.get("created_at")),
+            })
 
         return records_list
     except Exception as e:
@@ -3751,108 +3308,81 @@ def load_fixed_bills():
         return []
 
 
+
+@st.cache_data(ttl=30)
+
 @st.cache_data(ttl=30)
 def load_fixed_bill_statuses(selected_month, selected_year):
     try:
-        status_ws = get_or_create_fixed_bills_status_worksheet()
-        raw_rows = google_sheets_retry(status_ws.get_all_values)
-        if len(raw_rows) <= 1:
-            return {}
-
-        headers = [clean_text(h) for h in raw_rows[0]]
-        field_map = {
-            header: headers.index(header) if header in headers else idx
-            for idx, header in enumerate(BILLS_STATUS_HEADERS)
+        rows = db_select_rows(
+            "fixed_bill_status",
+            columns="bill_id,paid",
+            filters={
+                "month": f"eq.{int(selected_month)}",
+                "year": f"eq.{int(selected_year)}",
+            },
+        )
+        return {
+            clean_text(row.get("bill_id")): bool(row.get("paid", False))
+            for row in rows
+            if clean_text(row.get("bill_id"))
         }
-
-        statuses = {}
-        for row in raw_rows[1:]:
-            row = list(row)
-            while len(row) < len(BILLS_STATUS_HEADERS):
-                row.append("")
-
-            month = int(safe_float(row[field_map.get("month", 1)])) if clean_text(row[field_map.get("month", 1)]) else 0
-            year = int(safe_float(row[field_map.get("year", 2)])) if clean_text(row[field_map.get("year", 2)]) else 0
-
-            if month == int(selected_month) and year == int(selected_year):
-                bill_id = clean_text(row[field_map.get("bill_id", 0)])
-                if bill_id:
-                    statuses[bill_id] = is_true_value(row[field_map.get("paid", 3)])
-
-        return statuses
     except Exception as e:
         st.error(f"Erro ao carregar status mensal das contas: {e}")
         return {}
 
 
-def set_fixed_bill_paid_status(bill_id, selected_month, selected_year, paid):
-    status_ws = get_or_create_fixed_bills_status_worksheet()
-    raw_rows = google_sheets_retry(status_ws.get_all_values)
 
-    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else BILLS_STATUS_HEADERS
-    field_map = {
-        header: headers.index(header) if header in headers else idx
-        for idx, header in enumerate(BILLS_STATUS_HEADERS)
+
+def set_fixed_bill_paid_status(bill_id, selected_month, selected_year, paid):
+    filters = {
+        "bill_id": f"eq.{clean_text(bill_id)}",
+        "month": f"eq.{int(selected_month)}",
+        "year": f"eq.{int(selected_year)}",
+    }
+    existing = db_select_rows(
+        "fixed_bill_status",
+        columns="id",
+        filters=filters,
+        page_size=10,
+    )
+
+    payload = {
+        "paid": bool(paid),
+        "paid_at": datetime.now().isoformat() if paid else None,
     }
 
-    target_row_idx = None
-    for row_idx, row in enumerate(raw_rows[1:], start=2):
-        row = list(row)
-        while len(row) < len(BILLS_STATUS_HEADERS):
-            row.append("")
-
-        row_bill_id = clean_text(row[field_map.get("bill_id", 0)])
-        row_month = int(safe_float(row[field_map.get("month", 1)])) if clean_text(row[field_map.get("month", 1)]) else 0
-        row_year = int(safe_float(row[field_map.get("year", 2)])) if clean_text(row[field_map.get("year", 2)]) else 0
-
-        if (
-            row_bill_id == clean_text(bill_id)
-            and row_month == int(selected_month)
-            and row_year == int(selected_year)
-        ):
-            target_row_idx = row_idx
-            break
-
-    paid_value = "TRUE" if paid else "FALSE"
-    paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if paid else ""
-
-    if target_row_idx:
-        google_sheets_retry(
-            status_ws.update,
-            range_name=f"D{target_row_idx}:E{target_row_idx}",
-            values=[[paid_value, paid_at]],
-            value_input_option="RAW",
+    if existing:
+        db_update_rows(
+            "fixed_bill_status",
+            {"id": f"eq.{existing[0]['id']}"},
+            payload,
         )
     else:
-        google_sheets_retry(
-            status_ws.append_row,
-            [
-                clean_text(bill_id),
-                int(selected_month),
-                int(selected_year),
-                paid_value,
-                paid_at,
-            ],
-            value_input_option="RAW",
+        db_insert_rows(
+            "fixed_bill_status",
+            {
+                "bill_id": clean_text(bill_id),
+                "month": int(selected_month),
+                "year": int(selected_year),
+                **payload,
+            },
         )
 
     st.cache_data.clear()
 
 
+
+
 def delete_fixed_bill_statuses(bill_id):
     try:
-        status_ws = get_or_create_fixed_bills_status_worksheet()
-        raw_rows = google_sheets_retry(status_ws.get_all_values)
-        rows_to_delete = []
-
-        for row_idx, row in enumerate(raw_rows[1:], start=2):
-            if row and clean_text(row[0]) == clean_text(bill_id):
-                rows_to_delete.append(row_idx)
-
-        for row_idx in sorted(rows_to_delete, reverse=True):
-            google_sheets_retry(status_ws.delete_rows, row_idx)
+        db_delete_rows(
+            "fixed_bill_status",
+            {"bill_id": f"eq.{clean_text(bill_id)}"},
+        )
     except Exception:
         pass
+
 
 
 def get_bill_due_date(selected_month, selected_year, due_day):
@@ -4011,34 +3541,24 @@ def render_bills_page(selected_month, selected_year):
                 st.stop()
 
             try:
-                bills_ws = get_or_create_fixed_bills_worksheet()
-                created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                bill_id = make_fixed_bill_id(
-                    bill_name.strip(),
-                    created_at,
-                    f"{time.time_ns()}",
-                )
-                new_bill_row = [
-                    bill_name.strip(),
-                    bill_category,
-                    round(bill_amount, 2),
-                    int(bill_due_day),
-                    bill_payment_method,
-                    bill_notes,
-                    "TRUE",
-                    created_at,
-                    bill_id,
-                ]
-                google_sheets_retry(
-                    bills_ws.append_row,
-                    new_bill_row,
-                    value_input_option="RAW",
+                db_insert_rows(
+                    "fixed_bills",
+                    {
+                        "name": bill_name.strip(),
+                        "category": bill_category,
+                        "amount": round(bill_amount, 2),
+                        "due_day": int(bill_due_day),
+                        "payment_method": bill_payment_method,
+                        "notes": clean_text(bill_notes) or None,
+                        "active": True,
+                    },
                 )
                 st.cache_data.clear()
                 st.success("Conta fixa adicionada.")
                 st.rerun()
             except Exception as err:
                 st.error(f"Erro ao salvar conta fixa: {err}")
+
 
     with list_col:
         st.subheader("Contas cadastradas")
@@ -4114,24 +3634,20 @@ def render_bills_page(selected_month, selected_year):
                 with remove_col:
                     if st.button(
                         "🗑️ Remover",
-                        key=f"remove_bill_{bill['sheet_row_idx']}",
+                        key=f"remove_bill_{bill_id}",
                         use_container_width=True,
                     ):
                         try:
-                            bills_ws = get_or_create_fixed_bills_worksheet()
-                            google_sheets_retry(
-                                bills_ws.delete_rows,
-                                bill["sheet_row_idx"],
+                            db_delete_rows(
+                                "fixed_bills",
+                                {"id": f"eq.{clean_text(bill_id)}"},
                             )
-                            delete_fixed_bill_statuses(bill_id)
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as err:
                             st.error(f"Erro ao remover conta fixa: {err}")
 
 
-CARD_INVOICES_SHEET_NAME = "faturas_cartoes_mensais"
-CARD_INVOICES_HEADERS = ["card", "month", "year", "amount", "updated_at", "paid", "paid_at"]
 CARD_INVOICE_NAMES = [
     "Nubank",
     "Mercado Pago",
@@ -4143,87 +3659,26 @@ CARD_INVOICE_NAMES = [
 ]
 
 
-def get_or_create_card_invoices_worksheet():
-    try:
-        invoices_ws = google_sheets_retry(sh.worksheet, CARD_INVOICES_SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        invoices_ws = google_sheets_retry(
-            sh.add_worksheet,
-            title=CARD_INVOICES_SHEET_NAME,
-            rows=500,
-            cols=len(CARD_INVOICES_HEADERS),
-        )
-        google_sheets_retry(
-            invoices_ws.append_row,
-            CARD_INVOICES_HEADERS,
-            value_input_option="RAW",
-        )
-        return invoices_ws
 
-    try:
-        values = google_sheets_retry(invoices_ws.get_all_values)
-        if not values:
-            google_sheets_retry(
-                invoices_ws.append_row,
-                CARD_INVOICES_HEADERS,
-                value_input_option="RAW",
-            )
-        else:
-            current_headers = [clean_text(h) for h in values[0]]
-            if current_headers != CARD_INVOICES_HEADERS:
-                google_sheets_retry(
-                    invoices_ws.update,
-                    range_name="A1:G1",
-                    values=[CARD_INVOICES_HEADERS],
-                    value_input_option="RAW",
-                )
-    except Exception:
-        pass
 
-    return invoices_ws
-
+@st.cache_data(ttl=30)
 
 @st.cache_data(ttl=30)
 def load_monthly_card_invoices(selected_month, selected_year):
     result = {card: 0.0 for card in CARD_INVOICE_NAMES}
-
     try:
-        invoices_ws = get_or_create_card_invoices_worksheet()
-        raw_rows = google_sheets_retry(invoices_ws.get_all_values)
-
-        if len(raw_rows) <= 1:
-            return result
-
-        headers = [clean_text(h) for h in raw_rows[0]]
-        field_map = {
-            header: headers.index(header) if header in headers else idx
-            for idx, header in enumerate(CARD_INVOICES_HEADERS)
-        }
-
-        for row in raw_rows[1:]:
-            row = list(row)
-            while len(row) < len(CARD_INVOICES_HEADERS):
-                row.append("")
-
-            card = clean_text(row[field_map.get("card", 0)])
-            month = (
-                int(safe_float(row[field_map.get("month", 1)]))
-                if clean_text(row[field_map.get("month", 1)])
-                else 0
-            )
-            year = (
-                int(safe_float(row[field_map.get("year", 2)]))
-                if clean_text(row[field_map.get("year", 2)])
-                else 0
-            )
-
-            if (
-                card in result
-                and month == int(selected_month)
-                and year == int(selected_year)
-            ):
-                result[card] = safe_float(row[field_map.get("amount", 3)])
-
+        rows = db_select_rows(
+            "card_invoices",
+            columns="card,amount",
+            filters={
+                "month": f"eq.{int(selected_month)}",
+                "year": f"eq.{int(selected_year)}",
+            },
+        )
+        for row in rows:
+            card = clean_text(row.get("card"))
+            if card in result:
+                result[card] = safe_float(row.get("amount"))
         return result
     except Exception as err:
         st.error(f"Erro ao carregar faturas mensais dos cartões: {err}")
@@ -4231,51 +3686,31 @@ def load_monthly_card_invoices(selected_month, selected_year):
 
 
 
+
+@st.cache_data(ttl=30)
+
 @st.cache_data(ttl=30)
 def load_monthly_card_invoice_statuses(selected_month, selected_year):
     result = {card: False for card in CARD_INVOICE_NAMES}
-
     try:
-        invoices_ws = get_or_create_card_invoices_worksheet()
-        raw_rows = google_sheets_retry(invoices_ws.get_all_values)
-
-        if len(raw_rows) <= 1:
-            return result
-
-        headers = [clean_text(h) for h in raw_rows[0]]
-        field_map = {
-            header: headers.index(header) if header in headers else idx
-            for idx, header in enumerate(CARD_INVOICES_HEADERS)
-        }
-
-        for row in raw_rows[1:]:
-            row = list(row)
-            while len(row) < len(CARD_INVOICES_HEADERS):
-                row.append("")
-
-            card = clean_text(row[field_map.get("card", 0)])
-            month = (
-                int(safe_float(row[field_map.get("month", 1)]))
-                if clean_text(row[field_map.get("month", 1)])
-                else 0
-            )
-            year = (
-                int(safe_float(row[field_map.get("year", 2)]))
-                if clean_text(row[field_map.get("year", 2)])
-                else 0
-            )
-
-            if (
-                card in result
-                and month == int(selected_month)
-                and year == int(selected_year)
-            ):
-                result[card] = is_true_value(row[field_map.get("paid", 5)])
-
+        rows = db_select_rows(
+            "card_invoices",
+            columns="card,paid",
+            filters={
+                "month": f"eq.{int(selected_month)}",
+                "year": f"eq.{int(selected_year)}",
+            },
+        )
+        for row in rows:
+            card = clean_text(row.get("card"))
+            if card in result:
+                result[card] = bool(row.get("paid", False))
         return result
     except Exception as err:
         st.error(f"Erro ao carregar status das faturas mensais: {err}")
         return result
+
+
 
 
 def set_monthly_card_invoice_paid_status(
@@ -4284,69 +3719,43 @@ def set_monthly_card_invoice_paid_status(
     selected_year,
     paid,
 ):
-    invoices_ws = get_or_create_card_invoices_worksheet()
-    raw_rows = google_sheets_retry(invoices_ws.get_all_values)
+    filters = {
+        "card": f"eq.{clean_text(card)}",
+        "month": f"eq.{int(selected_month)}",
+        "year": f"eq.{int(selected_year)}",
+    }
+    existing = db_select_rows(
+        "card_invoices",
+        columns="id",
+        filters=filters,
+        page_size=10,
+    )
 
-    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else CARD_INVOICES_HEADERS
-    field_map = {
-        header: headers.index(header) if header in headers else idx
-        for idx, header in enumerate(CARD_INVOICES_HEADERS)
+    payload = {
+        "paid": bool(paid),
+        "paid_at": datetime.now().isoformat() if paid else None,
     }
 
-    target_row_idx = None
-
-    for row_idx, row in enumerate(raw_rows[1:], start=2):
-        row = list(row)
-        while len(row) < len(CARD_INVOICES_HEADERS):
-            row.append("")
-
-        row_card = clean_text(row[field_map.get("card", 0)])
-        row_month = (
-            int(safe_float(row[field_map.get("month", 1)]))
-            if clean_text(row[field_map.get("month", 1)])
-            else 0
-        )
-        row_year = (
-            int(safe_float(row[field_map.get("year", 2)]))
-            if clean_text(row[field_map.get("year", 2)])
-            else 0
-        )
-
-        if (
-            row_card == clean_text(card)
-            and row_month == int(selected_month)
-            and row_year == int(selected_year)
-        ):
-            target_row_idx = row_idx
-            break
-
-    paid_value = "TRUE" if paid else "FALSE"
-    paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if paid else ""
-    updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    if target_row_idx:
-        google_sheets_retry(
-            invoices_ws.update,
-            range_name=f"E{target_row_idx}:G{target_row_idx}",
-            values=[[updated_at, paid_value, paid_at]],
-            value_input_option="RAW",
+    if existing:
+        db_update_rows(
+            "card_invoices",
+            {"id": f"eq.{existing[0]['id']}"},
+            payload,
         )
     else:
-        google_sheets_retry(
-            invoices_ws.append_row,
-            [
-                clean_text(card),
-                int(selected_month),
-                int(selected_year),
-                0.0,
-                updated_at,
-                paid_value,
-                paid_at,
-            ],
-            value_input_option="RAW",
+        db_insert_rows(
+            "card_invoices",
+            {
+                "card": clean_text(card),
+                "month": int(selected_month),
+                "year": int(selected_year),
+                "amount": 0.0,
+                **payload,
+            },
         )
 
     st.cache_data.clear()
+
 
 
 def handle_monthly_card_paid_toggle(
@@ -4363,69 +3772,45 @@ def handle_monthly_card_paid_toggle(
     )
 
 
+
 def save_monthly_card_invoices(selected_month, selected_year, invoice_values):
-    invoices_ws = get_or_create_card_invoices_worksheet()
-    raw_rows = google_sheets_retry(invoices_ws.get_all_values)
-
-    headers = [clean_text(h) for h in raw_rows[0]] if raw_rows else CARD_INVOICES_HEADERS
-    field_map = {
-        header: headers.index(header) if header in headers else idx
-        for idx, header in enumerate(CARD_INVOICES_HEADERS)
+    rows = db_select_rows(
+        "card_invoices",
+        columns="id,card",
+        filters={
+            "month": f"eq.{int(selected_month)}",
+            "year": f"eq.{int(selected_year)}",
+        },
+    )
+    existing = {
+        clean_text(row.get("card")): clean_text(row.get("id"))
+        for row in rows
+        if clean_text(row.get("card"))
     }
-
-    existing_rows = {}
-    for row_idx, row in enumerate(raw_rows[1:], start=2):
-        row = list(row)
-        while len(row) < len(CARD_INVOICES_HEADERS):
-            row.append("")
-
-        card = clean_text(row[field_map.get("card", 0)])
-        month = (
-            int(safe_float(row[field_map.get("month", 1)]))
-            if clean_text(row[field_map.get("month", 1)])
-            else 0
-        )
-        year = (
-            int(safe_float(row[field_map.get("year", 2)]))
-            if clean_text(row[field_map.get("year", 2)])
-            else 0
-        )
-
-        if (
-            card in CARD_INVOICE_NAMES
-            and month == int(selected_month)
-            and year == int(selected_year)
-        ):
-            existing_rows[card] = row_idx
-
-    updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for card in CARD_INVOICE_NAMES:
         amount = round(safe_float(invoice_values.get(card, 0)), 2)
-        row_values = [
-            card,
-            int(selected_month),
-            int(selected_year),
-            amount,
-            updated_at,
-        ]
-
-        if card in existing_rows:
-            row_idx = existing_rows[card]
-            google_sheets_retry(
-                invoices_ws.update,
-                range_name=f"A{row_idx}:E{row_idx}",
-                values=[row_values],
-                value_input_option="RAW",
+        if card in existing:
+            db_update_rows(
+                "card_invoices",
+                {"id": f"eq.{existing[card]}"},
+                {"amount": amount},
             )
         else:
-            google_sheets_retry(
-                invoices_ws.append_row,
-                row_values + ["FALSE", ""],
-                value_input_option="RAW",
+            db_insert_rows(
+                "card_invoices",
+                {
+                    "card": card,
+                    "month": int(selected_month),
+                    "year": int(selected_year),
+                    "amount": amount,
+                    "paid": False,
+                    "paid_at": None,
+                },
             )
 
     st.cache_data.clear()
+
 
 
 def parse_currency_text(value):
@@ -4751,21 +4136,80 @@ def parse_import_note_metadata(notes):
     }
 
 
+
+@st.cache_data(ttl=30)
+def load_import_batches():
+    return db_select_rows(
+        "import_batches",
+        columns="*",
+        order="imported_at.desc,id.desc",
+    )
+
+
 def build_import_history(records):
     groups = {}
+    records_by_batch = {}
+
     for record in records:
-        meta = parse_import_note_metadata(record.get("notes", ""))
+        batch_db_id = clean_text(record.get("import_batch_id"))
+        if batch_db_id:
+            records_by_batch.setdefault(batch_db_id, []).append(record)
+
+    for batch in load_import_batches():
+        batch_db_id = clean_text(batch.get("id"))
+        batch_code = clean_text(batch.get("batch_code")) or batch_db_id
+        batch_records = records_by_batch.get(batch_db_id, [])
+
+        group = {
+            "batch_db_id": batch_db_id,
+            "batch_id": batch_code,
+            "source": clean_text(batch.get("source")) or "Origem não identificada",
+            "file_name": clean_text(batch.get("filename")) or "Arquivo não identificado",
+            "imported_at": clean_text(batch.get("imported_at")),
+            "is_legacy": False,
+            "rows": [clean_text(record.get("record_id")) for record in batch_records],
+            "count": len(batch_records),
+            "income": 0.0,
+            "expense": 0.0,
+            "start_date": None,
+            "end_date": None,
+        }
+
+        for record in batch_records:
+            amount = abs(safe_float(record.get("amount")))
+            if clean_text(record.get("type")).lower() == "entrada":
+                group["income"] += amount
+            elif clean_text(record.get("type")).lower() == "saida":
+                group["expense"] += amount
+
+            record_date = record.get("created_at")
+            if isinstance(record_date, pd.Timestamp):
+                record_date = record_date.to_pydatetime()
+            if isinstance(record_date, datetime):
+                if group["start_date"] is None or record_date < group["start_date"]:
+                    group["start_date"] = record_date
+                if group["end_date"] is None or record_date > group["end_date"]:
+                    group["end_date"] = record_date
+
+        groups[f"db:{batch_db_id}"] = group
+
+    for record in records:
+        if clean_text(record.get("import_batch_id")):
+            continue
+
+        meta = parse_import_note_metadata(record.get("notes"))
         if not meta:
             continue
 
-        batch_id = meta["batch_id"]
-        if batch_id not in groups:
-            groups[batch_id] = {
-                "batch_id": batch_id,
+        group_key = f"legacy:{meta['batch_id']}"
+        if group_key not in groups:
+            groups[group_key] = {
+                "batch_db_id": "",
+                "batch_id": meta["batch_id"],
                 "source": meta["source"],
                 "file_name": meta["file_name"],
                 "imported_at": meta["imported_at"],
-                "is_legacy": meta["is_legacy"],
+                "is_legacy": True,
                 "rows": [],
                 "count": 0,
                 "income": 0.0,
@@ -4774,14 +4218,14 @@ def build_import_history(records):
                 "end_date": None,
             }
 
-        group = groups[batch_id]
-        group["rows"].append(int(record.get("sheet_row_idx", 0)))
+        group = groups[group_key]
+        group["rows"].append(clean_text(record.get("record_id")))
         group["count"] += 1
 
-        amount = abs(safe_float(record.get("amount", 0)))
-        if clean_text(record.get("type", "")).lower() == "entrada":
+        amount = abs(safe_float(record.get("amount")))
+        if clean_text(record.get("type")).lower() == "entrada":
             group["income"] += amount
-        elif clean_text(record.get("type", "")).lower() == "saida":
+        elif clean_text(record.get("type")).lower() == "saida":
             group["expense"] += amount
 
         record_date = record.get("created_at")
@@ -4798,12 +4242,29 @@ def build_import_history(records):
     return history
 
 
-def delete_import_batch(row_indices):
-    rows = sorted([int(row) for row in row_indices if int(row) > 1], reverse=True)
-    for row_idx in rows:
-        google_sheets_retry(worksheet.delete_rows, row_idx)
+
+
+def delete_import_batch(item):
+    deleted_count = int(item.get("count", 0))
+
+    batch_db_id = clean_text(item.get("batch_db_id"))
+    if batch_db_id:
+        db_delete_rows(
+            "import_batches",
+            {"id": f"eq.{batch_db_id}"},
+        )
+    else:
+        for record_id in item.get("rows", []):
+            record_id = clean_text(record_id)
+            if record_id:
+                db_delete_rows(
+                    "transactions",
+                    {"id": f"eq.{record_id}"},
+                )
+
     st.cache_data.clear()
-    return len(rows)
+    return deleted_count
+
 
 
 def render_import_history(records):
@@ -4842,11 +4303,11 @@ def render_import_history(records):
             )
 
             if pending_key == item["batch_id"]:
-                st.warning(f"Confirme para remover {item['count']} transação(ões) dessa importação da planilha.")
+                st.warning(f"Confirme para remover {item['count']} transação(ões) dessa importação do banco de dados.")
                 confirm_col, cancel_col = st.columns([0.55, 0.45])
                 if confirm_col.button("Confirmar exclusão da importação", type="primary", key=f"confirm_delete_import_{item['batch_id']}"):
                     try:
-                        deleted_count = delete_import_batch(item["rows"])
+                        deleted_count = delete_import_batch(item)
                         st.session_state["import_success_message"] = f"Importação desfeita: {deleted_count} transação(ões) removida(s)."
                         st.session_state.pop("pending_import_delete", None)
                         st.rerun()
@@ -4863,7 +4324,7 @@ def render_import_history(records):
 def render_import_csv_page(selected_month, selected_year, records):
     st.markdown("# Importe os dados do seu banco")
     st.markdown(
-        '<div class="page-kicker">Envie um extrato CSV, revise as linhas detectadas e importe apenas as transações aprovadas para sua planilha.</div>',
+        '<div class="page-kicker">Envie um extrato CSV, revise as linhas detectadas e importe apenas as transações aprovadas para o app.</div>',
         unsafe_allow_html=True
     )
     st.markdown(
@@ -4906,7 +4367,7 @@ def render_import_csv_page(selected_month, selected_year, records):
             1. O app lê o arquivo temporariamente.  
             2. Você escolhe quais colunas representam data, descrição e valor.  
             3. O app mostra uma prévia com possíveis duplicados.  
-            4. Só as linhas marcadas como **Importar** entram na planilha.
+            4. Só as linhas marcadas como **Importar** entram no banco de dados.
             """
         )
 
@@ -5080,10 +4541,10 @@ def render_import_csv_page(selected_month, selected_year, records):
         import_progress = import_progress_placeholder.progress(0)
         import_status_placeholder.caption("Preparando importação para o Supabase...")
 
-        rows_for_sheet = []
+        rows_for_db = []
         batch_base = f"{uploaded_file.name}|{source}|{import_type}|{datetime.now().isoformat()}"
-        batch_id = hashlib.sha1(batch_base.encode("utf-8")).hexdigest()[:12]
-        imported_at = datetime.now().strftime("%d/%m/%Y %H:%M")
+        batch_code = hashlib.sha1(batch_base.encode("utf-8")).hexdigest()[:12]
+        imported_at_label = datetime.now().strftime("%d/%m/%Y %H:%M")
         total_to_import = max(len(rows_to_import), 1)
 
         for position, (_, row) in enumerate(rows_to_import.iterrows(), start=1):
@@ -5094,13 +4555,11 @@ def render_import_csv_page(selected_month, selected_year, records):
             installment_value = amount
             notes = (
                 f"Importado via CSV | Origem: {source} | Arquivo: {uploaded_file.name} | "
-                f"Lote: {batch_id} | Importado em: {imported_at} | ID: {row['import_id']} | "
+                f"Lote: {batch_code} | Importado em: {imported_at_label} | ID: {row['import_id']} | "
                 f"Histórico antigo: {'TRUE' if import_as_historical else 'FALSE'}"
             )
-            impact_current_balance = "FALSE" if import_as_historical else "TRUE"
-            historical_only = "TRUE" if import_as_historical else "FALSE"
 
-            rows_for_sheet.append([
+            transaction_values = [
                 tx_type,
                 clean_text(row["Descrição"]),
                 round(amount, 2),
@@ -5115,32 +4574,71 @@ def render_import_csv_page(selected_month, selected_year, records):
                 normalize_category_for_save(row.get("Categoria", "")),
                 normalize_subcategory_for_save(row.get("Subcategoria", "")),
                 clean_text(row.get("Tags", "")),
-                impact_current_balance,
-                historical_only,
-            ])
+                "FALSE" if import_as_historical else "TRUE",
+                "TRUE" if import_as_historical else "FALSE",
+            ]
+
+            payload = transaction_values_to_payload(
+                transaction_values,
+                import_source=source,
+                import_row_id=row["import_id"],
+            )
+            rows_for_db.append(payload)
 
             if position == total_to_import or position % max(1, total_to_import // 10) == 0:
                 import_progress.progress(min(80, int((position / total_to_import) * 80)))
-                import_status_placeholder.caption(f"Preparando linhas... {position}/{total_to_import}")
+                import_status_placeholder.caption(
+                    f"Preparando linhas... {position}/{total_to_import}"
+                )
 
+        batch_db_id = None
         try:
-            if rows_for_sheet:
-                ensure_transaction_headers()
-                import_progress.progress(88)
-                import_status_placeholder.caption("Enviando para o Supabase...")
-                google_sheets_retry(worksheet.append_rows, rows_for_sheet, value_input_option="RAW")
+            if rows_for_db:
+                import_progress.progress(86)
+                import_status_placeholder.caption("Criando lote de importação...")
+
+                batch_rows = db_insert_rows(
+                    "import_batches",
+                    {
+                        "batch_code": batch_code,
+                        "filename": uploaded_file.name,
+                        "source": source,
+                        "import_type": import_type,
+                        "row_count": len(rows_for_db),
+                        "historical_only": bool(import_as_historical),
+                    },
+                )
+                batch_db_id = clean_text(batch_rows[0].get("id")) if batch_rows else ""
+                if not batch_db_id:
+                    raise RuntimeError("O Supabase não retornou o ID do lote de importação.")
+
+                for payload in rows_for_db:
+                    payload["import_batch_id"] = batch_db_id
+
+                import_progress.progress(92)
+                import_status_placeholder.caption("Enviando transações para o Supabase...")
+                db_insert_rows("transactions", rows_for_db)
+
                 import_progress.progress(100)
                 import_status_placeholder.success("Importação concluída")
                 st.cache_data.clear()
-                st.session_state["import_success_message"] = f"Importação concluída: {len(rows_for_sheet)} transação(ões) adicionada(s). Lote: {batch_id}"
+                st.session_state["import_success_message"] = (
+                    f"Importação concluída: {len(rows_for_db)} transação(ões) adicionada(s). "
+                    f"Lote: {batch_code}"
+                )
                 st.rerun()
         except Exception as err:
+            if batch_db_id:
+                try:
+                    db_delete_rows(
+                        "import_batches",
+                        {"id": f"eq.{batch_db_id}"},
+                    )
+                except Exception:
+                    pass
             import_status_placeholder.empty()
             st.error(f"Erro ao importar transações: {err}")
 
-
-# A migração Google Sheets -> Supabase foi concluída com sucesso.
-# O app abaixo já opera diretamente no Supabase.
 
 def render_install_app_page():
     installed = is_running_installed_webapp()
@@ -5269,10 +4767,9 @@ for r in records:
     r_date = r["created_at"]
     amount = r["amount"]
     inst_val = r["installment_value"]
-    
+
     is_change_adjustment = is_cash_change_adjustment(r)
     affects_current_balance = should_record_impact_current_balance(r, app_start_date)
-    appears_in_home = should_record_appear_in_home(r, app_start_date)
 
     # Saldo atual: parte dos saldos iniciais e só considera transações a partir da data de início.
     # Importações marcadas como histórico antigo ficam guardadas para relatórios futuros, mas não mexem no saldo.
@@ -5291,15 +4788,17 @@ for r in records:
             elif r["payment_method"] == "dinheiro_vivo":
                 cash_balance -= amount
             elif r["payment_method"] == "credito_parcelado":
+                # Compras no crédito entram nas Saídas do mês pela parcela,
+                # mas não reduzem diretamente o saldo em banco.
                 pass
             else:
                 bank_balance -= amount
 
-    # Home e dashboards mensais: não exibem histórico antigo nem transações anteriores à data de início.
-    if not appears_in_home:
-        continue
-
     if r["payment_method"] != "credito_parcelado":
+        # Transações comuns continuam respeitando a data inicial do app pela data real da transação.
+        if not should_record_appear_in_home(r, app_start_date):
+            continue
+
         if r_date.month == selected_month and r_date.year == selected_year:
             r["order_amount"] = amount
             filtered_records.append(r)
@@ -5309,18 +4808,36 @@ for r in records:
             elif r["payment_method"] != "saque_dinheiro":
                 total_expense_month += amount
     else:
+        # Parceladas precisam ser avaliadas parcela por parcela.
+        # Ex.: compra em 20/02 em 5x gera ocorrências em fev, mar, abr, mai e jun.
+        # Se o app começou em junho, a compra-base é anterior à data inicial,
+        # mas a parcela de junho ainda deve aparecer e compor as Saídas de junho.
+        if is_historical_record(r):
+            continue
+
         try:
             total_inst = int(r["installments"]) if r["installments"] != "" else 1
         except Exception:
             total_inst = 1
+
+        total_inst = max(1, total_inst)
+
         for i in range(1, total_inst + 1):
-            inst_date = r_date + dateutil.relativedelta.relativedelta(months=i-1)
+            inst_date = r_date + dateutil.relativedelta.relativedelta(months=i - 1)
+
+            # A regra de início do app é aplicada à ocorrência da parcela,
+            # e não à data original da compra.
+            if inst_date.date() < app_start_date:
+                continue
+
             if inst_date.month == selected_month and inst_date.year == selected_year:
                 inst_record = r.copy()
                 base_desc = clean_text(r.get("description", "")) or "Compra parcelada"
+                inst_record["created_at"] = inst_date
                 inst_record["display_description"] = f"{base_desc} ({i}/{total_inst})"
                 inst_record["display_amount"] = inst_val
                 inst_record["is_installment_view"] = True
+                inst_record["installment_number"] = i
                 inst_record["order_amount"] = inst_val
                 filtered_records.append(inst_record)
                 total_expense_month += inst_val
@@ -5537,19 +5054,19 @@ if page_key == "home":
                 is_new_transaction = st.session_state.editing_index is None
 
                 try:
+                    transaction_payload = transaction_values_to_payload(updated_row)
+
                     if st.session_state.editing_index is not None:
-                        google_sheets_retry(
-                            worksheet.update,
-                            range_name=f"A{st.session_state.editing_index}:P{st.session_state.editing_index}",
-                            values=[updated_row],
-                            value_input_option="RAW"
+                        db_update_rows(
+                            "transactions",
+                            {"id": f"eq.{clean_text(st.session_state.editing_index)}"},
+                            transaction_payload,
                         )
                         st.session_state.editing_index = None
                         st.session_state.edit_values = {}
                     else:
-                        ensure_transaction_headers()
-                        google_sheets_retry(worksheet.append_row, updated_row, value_input_option="RAW")
-                    
+                        db_insert_rows("transactions", transaction_payload)
+
                     if is_new_transaction:
                         if tx_type == "entrada" and tx_method != "troco_dinheiro":
                             st.session_state.screen_animation_emoji = "🤑"
@@ -5694,7 +5211,7 @@ if page_key == "home":
 
                         st.markdown(f"<span style='color:{color}; font-weight:bold; font-size:18px;'>{prefix} {format_currency(val)}</span>", unsafe_allow_html=True)
 
-                        row_to_target = row["sheet_row_idx"]
+                        row_to_target = row["record_id"]
                         edit_key = f"edit_{row_to_target}_{idx}"
                         del_key = f"del_{row_to_target}_{idx}"
                         btn_col1, btn_col2 = st.columns(2)
@@ -5706,11 +5223,14 @@ if page_key == "home":
                         with btn_col2:
                             if st.button("🗑️ Excluir", key=del_key, help="Excluir permanentemente", use_container_width=True):
                                 try:
-                                    google_sheets_retry(worksheet.delete_rows, row_to_target)
+                                    db_delete_rows(
+                                        "transactions",
+                                        {"id": f"eq.{clean_text(row_to_target)}"},
+                                    )
                                     st.cache_data.clear()
                                     st.rerun()
-                                except Exception:
-                                    pass
+                                except Exception as err:
+                                    st.error(f"Erro ao excluir transação: {err}")
         else:
             st.info("Nenhuma transação registrada para o período selecionado.")
 
